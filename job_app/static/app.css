@@ -1,0 +1,681 @@
+/* ╔══════════════════════════════════════════════════════════════════════════╗
+   ║  JobPilot v3 — Neumorphic Design System                               ║
+   ║  Soft extruded surfaces, concave inputs, tactile buttons.              ║
+   ╚══════════════════════════════════════════════════════════════════════════╝ */
+
+:root {
+  /* ── neumorphic base ─────────────────────────── */
+  --neu-bg:           #e0e5ec;
+  --neu-bg-2:         #d5dae3;
+  --neu-shadow-dark:  #a3b1c6;
+  --neu-shadow-light: #ffffff;
+
+  /* raised shadow (convex) */
+  --neu-raised:       6px 6px 14px var(--neu-shadow-dark),
+                      -6px -6px 14px var(--neu-shadow-light);
+  --neu-raised-sm:    4px 4px 8px var(--neu-shadow-dark),
+                      -4px -4px 8px var(--neu-shadow-light);
+  --neu-raised-lg:    8px 8px 18px var(--neu-shadow-dark),
+                      -8px -8px 18px var(--neu-shadow-light);
+
+  /* pressed shadow (concave / inset) */
+  --neu-pressed:      inset 4px 4px 8px var(--neu-shadow-dark),
+                      inset -4px -4px 8px var(--neu-shadow-light);
+  --neu-pressed-sm:   inset 2px 2px 5px var(--neu-shadow-dark),
+                      inset -2px -2px 5px var(--neu-shadow-light);
+  --neu-pressed-lg:   inset 6px 6px 12px var(--neu-shadow-dark),
+                      inset -6px -6px 12px var(--neu-shadow-light);
+
+  /* ── sidebar (dark neumorphic) ───────────────── */
+  --neu-dark:         #2d3440;
+  --neu-dark-2:       #343c4a;
+  --neu-dark-shadow:  #232a34;
+  --neu-dark-light:   #37404e;
+  --neu-dark-text:    #e0e5ec;
+  --neu-dark-dim:     #8d99ae;
+  --neu-dark-mute:    #5c687a;
+  --neu-dark-raised:  5px 5px 10px var(--neu-dark-shadow),
+                      -5px -5px 10px var(--neu-dark-light);
+  --neu-dark-pressed: inset 3px 3px 6px var(--neu-dark-shadow),
+                      inset -3px -3px 6px var(--neu-dark-light);
+
+  /* ── text ────────────────────────────────────── */
+  --jp-ink:       #2d3436;
+  --jp-ink-2:     #3d4449;
+  --jp-dim:       #636e72;
+  --jp-mute:      #8e99a0;
+
+  /* ── accents ─────────────────────────────────── */
+  --jp-primary:     #6c63ff;
+  --jp-primary-2:   #5a52e0;
+  --jp-primary-50:  #eceaff;
+  --jp-primary-100: #d5d1ff;
+
+  --jp-amber:       #e2a03f;
+  --jp-amber-2:     #c7882d;
+  --jp-amber-50:    #fdf3df;
+
+  --jp-emerald:     #27ae60;
+  --jp-emerald-50:  #dff5e8;
+
+  --jp-rose:        #e74c5f;
+  --jp-rose-50:     #fde8eb;
+
+  --jp-violet:      #8b5cf6;
+  --jp-violet-50:   #f0e8ff;
+
+  /* ── type ────────────────────────────────────── */
+  --jp-sans:    'Geist', 'Inter', system-ui, -apple-system, sans-serif;
+  --jp-serif:   'Newsreader', 'Source Serif Pro', Georgia, serif;
+  --jp-mono:    'JetBrains Mono', ui-monospace, Menlo, monospace;
+
+  --jp-radius-sm: 10px;
+  --jp-radius:    16px;
+  --jp-radius-lg: 20px;
+}
+
+
+/* ══════════════════════════════════════════════════════════════════════════
+   BASE
+   ══════════════════════════════════════════════════════════════════════════ */
+
+.jp-app {
+  font-family: var(--jp-sans);
+  color: var(--jp-ink);
+  background: var(--neu-bg);
+  font-size: 15px;
+  line-height: 1.45;
+  font-feature-settings: 'ss01','cv11';
+  -webkit-font-smoothing: antialiased;
+  letter-spacing: -0.005em;
+}
+.jp-app *, .jp-app *::before, .jp-app *::after { box-sizing: border-box; }
+
+
+/* ══════════════════════════════════════════════════════════════════════════
+   TYPOGRAPHY
+   ══════════════════════════════════════════════════════════════════════════ */
+
+.jp-display {
+  font-family: var(--jp-serif);
+  font-weight: 500;
+  font-size: 44px;
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+}
+.jp-h1 { font-size: 28px; font-weight: 600; letter-spacing: -0.02em; line-height: 1.15; }
+.jp-h2 { font-size: 20px; font-weight: 600; letter-spacing: -0.01em; line-height: 1.25; }
+.jp-h3 { font-size: 16px; font-weight: 600; letter-spacing: -0.005em; }
+.jp-mono { font-family: var(--jp-mono); font-feature-settings: 'zero','tnum'; }
+.jp-eyebrow {
+  font-family: var(--jp-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--jp-mute);
+}
+.jp-dim { color: var(--jp-dim); }
+.jp-mute { color: var(--jp-mute); }
+
+
+/* ══════════════════════════════════════════════════════════════════════════
+   SHELL — sidebar + main
+   ══════════════════════════════════════════════════════════════════════════ */
+
+.jp-shell {
+  display: grid;
+  grid-template-columns: 258px 1fr;
+  height: 100%;
+}
+
+/* ── sidebar (dark neumorphic) ─────────────────────────────────────────── */
+.jp-sidebar {
+  background: var(--neu-dark);
+  color: var(--neu-dark-text);
+  padding: 24px 18px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.jp-brand {
+  display: flex; align-items: center; gap: 10px;
+  padding: 6px 8px;
+  color: #fff;
+  font-weight: 600;
+  font-size: 17px;
+  letter-spacing: -0.02em;
+  text-decoration: none;
+}
+.jp-brand .mark {
+  width: 32px; height: 32px;
+  display: grid; place-items: center;
+  background: var(--jp-primary);
+  border-radius: 10px;
+  color: #fff;
+  box-shadow: 3px 3px 8px var(--neu-dark-shadow),
+              -3px -3px 8px var(--neu-dark-light),
+              0 0 20px rgba(108,99,255,0.3);
+}
+.jp-brand .ver {
+  margin-left: auto;
+  font-family: var(--jp-mono);
+  font-size: 10px;
+  color: var(--neu-dark-mute);
+  letter-spacing: 0.1em;
+}
+
+.jp-nav-section {
+  font-family: var(--jp-mono);
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--neu-dark-mute);
+  padding: 14px 10px 6px;
+}
+
+.jp-nav-item {
+  display: flex; align-items: center; gap: 11px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  font-size: 14px;
+  color: var(--neu-dark-dim);
+  cursor: pointer;
+  transition: all .2s ease;
+  text-decoration: none;
+}
+.jp-nav-item:hover {
+  color: var(--neu-dark-text);
+  box-shadow: var(--neu-dark-raised);
+}
+.jp-nav-item.active {
+  color: #fff;
+  box-shadow: var(--neu-dark-pressed);
+  background: transparent;
+}
+.jp-nav-item .ic { width: 16px; height: 16px; display:grid; place-items:center; opacity: 0.85; }
+.jp-nav-item .count {
+  margin-left: auto;
+  font-family: var(--jp-mono);
+  font-size: 11px;
+  color: var(--neu-dark-mute);
+  background: rgba(255,255,255,0.05);
+  padding: 2px 8px;
+  border-radius: 8px;
+}
+.jp-nav-item.active .count {
+  color: var(--neu-dark-text);
+  background: rgba(255,255,255,0.08);
+}
+
+/* ── pilot card ── */
+.jp-pilot-card {
+  margin-top: auto;
+  background: var(--neu-dark);
+  border-radius: 16px;
+  padding: 16px;
+  box-shadow: var(--neu-dark-raised);
+}
+.jp-pilot-row { display:flex; align-items: center; gap: 10px; }
+.jp-pilot-avatar {
+  width: 38px; height: 38px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #c4b5fd, #6d28d9);
+  display: grid; place-items: center;
+  color: #fff; font-weight: 600; font-size: 13px;
+  box-shadow: 3px 3px 8px var(--neu-dark-shadow),
+              -2px -2px 6px var(--neu-dark-light);
+}
+.jp-pilot-meta .name { color: #fff; font-size: 13px; font-weight: 600; line-height: 1.1; }
+.jp-pilot-meta .role { color: var(--neu-dark-mute); font-size: 11px; margin-top: 2px; }
+
+/* ── main area ── */
+.jp-main {
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  background: var(--neu-bg);
+}
+
+
+/* ══════════════════════════════════════════════════════════════════════════
+   TOPBAR
+   ══════════════════════════════════════════════════════════════════════════ */
+
+.jp-topbar {
+  height: 64px;
+  display: flex; align-items: center;
+  padding: 0 32px;
+  gap: 18px;
+  background: var(--neu-bg);
+  /* subtle bottom shadow to separate */
+  box-shadow: 0 2px 6px var(--neu-shadow-dark);
+  position: relative;
+  z-index: 2;
+}
+.jp-crumb { display:flex; align-items:center; gap: 8px; font-size: 14px; color: var(--jp-dim); }
+.jp-crumb .here { color: var(--jp-ink); font-weight: 500; }
+
+
+/* ══════════════════════════════════════════════════════════════════════════
+   CARDS — raised neumorphic surfaces
+   ══════════════════════════════════════════════════════════════════════════ */
+
+.jp-card {
+  background: var(--neu-bg);
+  border: none;
+  border-radius: var(--jp-radius);
+  box-shadow: var(--neu-raised);
+  transition: box-shadow .2s ease;
+}
+.jp-card.flat {
+  background: var(--neu-bg);
+  box-shadow: var(--neu-raised-sm);
+}
+.jp-card-pad { padding: 24px; }
+
+/* interactive card on hover: lift more */
+.jp-card:hover {
+  box-shadow: var(--neu-raised-lg);
+}
+
+
+/* ══════════════════════════════════════════════════════════════════════════
+   BUTTONS — convex raised, press to concave
+   ══════════════════════════════════════════════════════════════════════════ */
+
+.jp-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  height: 44px;
+  padding: 0 20px;
+  border-radius: 12px;
+  background: var(--neu-bg);
+  border: none;
+  color: var(--jp-ink);
+  font-family: var(--jp-sans);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  box-shadow: var(--neu-raised-sm);
+  transition: box-shadow .15s ease, transform .1s ease;
+  letter-spacing: -0.005em;
+}
+.jp-btn:hover {
+  box-shadow: var(--neu-raised);
+}
+.jp-btn:active {
+  box-shadow: var(--neu-pressed-sm);
+  transform: scale(0.98);
+}
+
+.jp-btn.primary {
+  background: var(--jp-primary);
+  color: #fff;
+  box-shadow: 4px 4px 10px rgba(108,99,255,0.35),
+              -4px -4px 10px var(--neu-shadow-light),
+              inset 0 1px 0 rgba(255,255,255,0.2);
+}
+.jp-btn.primary:hover {
+  background: var(--jp-primary-2);
+  box-shadow: 6px 6px 14px rgba(108,99,255,0.4),
+              -6px -6px 14px var(--neu-shadow-light),
+              inset 0 1px 0 rgba(255,255,255,0.2);
+}
+.jp-btn.primary:active {
+  box-shadow: inset 4px 4px 8px rgba(80,70,200,0.3),
+              inset -2px -2px 6px rgba(140,130,255,0.2);
+}
+
+.jp-btn.dark {
+  background: var(--jp-ink);
+  color: #fff;
+  box-shadow: 4px 4px 10px var(--neu-shadow-dark),
+              -4px -4px 10px var(--neu-shadow-light);
+}
+.jp-btn.dark:hover { background: #1a1e22; }
+.jp-btn.dark:active { box-shadow: var(--neu-pressed); }
+
+.jp-btn.ghost {
+  background: transparent;
+  box-shadow: none;
+}
+.jp-btn.ghost:hover {
+  box-shadow: var(--neu-raised-sm);
+}
+.jp-btn.ghost:active {
+  box-shadow: var(--neu-pressed-sm);
+}
+
+.jp-btn.sm { height: 36px; padding: 0 14px; font-size: 13px; border-radius: 10px; gap: 6px; }
+.jp-btn.lg { height: 52px; padding: 0 26px; font-size: 15px; border-radius: 14px; }
+.jp-btn.block { width: 100%; }
+
+
+/* ══════════════════════════════════════════════════════════════════════════
+   INPUTS — concave / pressed-in neumorphic fields
+   ══════════════════════════════════════════════════════════════════════════ */
+
+.jp-field { display:flex; flex-direction: column; gap: 6px; }
+.jp-field .label {
+  font-size: 13px; font-weight: 500; color: var(--jp-ink-2);
+  display: flex; align-items: center; gap: 6px;
+}
+.jp-field .help { font-size: 12.5px; color: var(--jp-mute); }
+.jp-field .req { color: var(--jp-rose); }
+
+.jp-input, .jp-select, .jp-textarea {
+  height: 46px;
+  width: 100%;
+  padding: 0 16px;
+  background: var(--neu-bg);
+  border: none;
+  border-radius: 12px;
+  font-size: 15px;
+  color: var(--jp-ink);
+  font-family: var(--jp-sans);
+  box-shadow: var(--neu-pressed);
+  transition: box-shadow .15s ease;
+}
+.jp-input::placeholder { color: var(--jp-mute); }
+.jp-input:focus, .jp-select:focus, .jp-textarea:focus {
+  outline: none;
+  box-shadow: var(--neu-pressed),
+              0 0 0 3px rgba(108,99,255,0.2);
+}
+.jp-textarea { height: auto; padding: 14px 16px; line-height: 1.5; resize: vertical; }
+
+.jp-input.with-icon { padding-left: 42px; }
+.jp-input-wrap { position: relative; }
+.jp-input-wrap .ic {
+  position: absolute; left: 14px; top: 50%;
+  transform: translateY(-50%);
+  color: var(--jp-mute);
+  pointer-events: none;
+}
+
+/* ── segmented control (neumorphic toggle) ── */
+.jp-seg {
+  display: inline-flex; align-items: center;
+  background: var(--neu-bg);
+  padding: 4px;
+  border-radius: 14px;
+  gap: 3px;
+  box-shadow: var(--neu-pressed-sm);
+}
+.jp-seg button {
+  border: 0; background: transparent;
+  height: 32px; padding: 0 14px;
+  font-size: 13px; font-weight: 500;
+  color: var(--jp-dim);
+  border-radius: 10px;
+  cursor: pointer;
+  font-family: var(--jp-sans);
+  transition: all .15s ease;
+}
+.jp-seg button:hover { color: var(--jp-ink); }
+.jp-seg button.on {
+  background: var(--neu-bg);
+  color: var(--jp-ink);
+  box-shadow: var(--neu-raised-sm);
+}
+
+
+/* ══════════════════════════════════════════════════════════════════════════
+   CHIPS — soft raised pills
+   ══════════════════════════════════════════════════════════════════════════ */
+
+.jp-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  height: 26px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: var(--neu-bg);
+  border: none;
+  font-size: 12.5px;
+  color: var(--jp-ink-2);
+  font-weight: 500;
+  box-shadow: var(--neu-raised-sm);
+}
+.jp-chip.primary {
+  background: var(--jp-primary-50);
+  color: var(--jp-primary);
+  box-shadow: 3px 3px 6px rgba(108,99,255,0.15), -3px -3px 6px var(--neu-shadow-light);
+}
+.jp-chip.amber {
+  background: var(--jp-amber-50);
+  color: var(--jp-amber-2);
+  box-shadow: 3px 3px 6px rgba(226,160,63,0.15), -3px -3px 6px var(--neu-shadow-light);
+}
+.jp-chip.emerald {
+  background: var(--jp-emerald-50);
+  color: var(--jp-emerald);
+  box-shadow: 3px 3px 6px rgba(39,174,96,0.15), -3px -3px 6px var(--neu-shadow-light);
+}
+.jp-chip.rose {
+  background: var(--jp-rose-50);
+  color: var(--jp-rose);
+  box-shadow: 3px 3px 6px rgba(231,76,95,0.15), -3px -3px 6px var(--neu-shadow-light);
+}
+.jp-chip.violet {
+  background: var(--jp-violet-50);
+  color: var(--jp-violet);
+  box-shadow: 3px 3px 6px rgba(139,92,246,0.15), -3px -3px 6px var(--neu-shadow-light);
+}
+.jp-chip.ghost {
+  background: transparent;
+  color: var(--jp-dim);
+  box-shadow: var(--neu-raised-sm);
+}
+.jp-chip.solid-dark {
+  background: var(--jp-ink);
+  color: #fff;
+  box-shadow: 3px 3px 6px var(--neu-shadow-dark), -3px -3px 6px var(--neu-shadow-light);
+}
+.jp-chip .dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: currentColor;
+}
+
+
+/* ══════════════════════════════════════════════════════════════════════════
+   PROGRESS BAR — inset track + raised fill
+   ══════════════════════════════════════════════════════════════════════════ */
+
+.jp-bar {
+  height: 8px;
+  background: var(--neu-bg);
+  border-radius: 999px;
+  overflow: hidden;
+  position: relative;
+  box-shadow: var(--neu-pressed-sm);
+}
+.jp-bar .fill {
+  height: 100%;
+  background: var(--jp-primary);
+  border-radius: inherit;
+  transition: width .6s ease;
+  box-shadow: 1px 0 4px rgba(108,99,255,0.3);
+}
+.jp-bar.amber .fill { background: var(--jp-amber); box-shadow: 1px 0 4px rgba(226,160,63,0.3); }
+.jp-bar.emerald .fill { background: var(--jp-emerald); box-shadow: 1px 0 4px rgba(39,174,96,0.3); }
+.jp-bar.dark {
+  background: rgba(255,255,255,0.06);
+  box-shadow: inset 2px 2px 5px var(--neu-dark-shadow),
+              inset -2px -2px 5px var(--neu-dark-light);
+}
+.jp-bar.tall { height: 10px; }
+
+
+/* ══════════════════════════════════════════════════════════════════════════
+   MATCH SCORE RING — raised circular element
+   ══════════════════════════════════════════════════════════════════════════ */
+
+.jp-match {
+  position: relative;
+  width: 48px; height: 48px;
+  display: grid; place-items: center;
+}
+.jp-match svg { position: absolute; inset: 0; transform: rotate(-90deg); }
+.jp-match .label { position: relative; font-family: var(--jp-mono); font-size: 12px; font-weight: 600; }
+
+
+/* ══════════════════════════════════════════════════════════════════════════
+   TABLE — neumorphic rows
+   ══════════════════════════════════════════════════════════════════════════ */
+
+.jp-table { width: 100%; border-collapse: separate; border-spacing: 0 8px; font-size: 14px; }
+.jp-table thead th {
+  text-align: left; font-weight: 500;
+  padding: 12px 16px;
+  font-family: var(--jp-mono);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--jp-mute);
+  background: transparent;
+  border: none;
+}
+.jp-table tbody td {
+  padding: 14px 16px;
+  vertical-align: middle;
+  background: var(--neu-bg);
+}
+.jp-table tbody tr td:first-child { border-radius: 12px 0 0 12px; }
+.jp-table tbody tr td:last-child { border-radius: 0 12px 12px 0; }
+.jp-table tbody tr {
+  box-shadow: var(--neu-raised-sm);
+  transition: box-shadow .2s ease;
+}
+.jp-table tbody tr:hover {
+  box-shadow: var(--neu-raised);
+}
+
+/* ── company avatar (raised icon) ── */
+.jp-co {
+  width: 38px; height: 38px;
+  border-radius: 10px;
+  display: grid; place-items: center;
+  background: var(--neu-bg);
+  font-family: var(--jp-mono);
+  font-size: 13px; font-weight: 600;
+  color: var(--jp-ink-2);
+  border: none;
+  flex-shrink: 0;
+  box-shadow: var(--neu-raised-sm);
+}
+.jp-co.sm { width: 30px; height: 30px; font-size: 11px; border-radius: 8px; }
+.jp-co.lg { width: 48px; height: 48px; font-size: 15px; border-radius: 12px; }
+
+
+/* ══════════════════════════════════════════════════════════════════════════
+   FOCUS & A11Y
+   ══════════════════════════════════════════════════════════════════════════ */
+
+.jp-app :focus-visible {
+  outline: 3px solid var(--jp-primary);
+  outline-offset: 2px;
+}
+
+
+/* ══════════════════════════════════════════════════════════════════════════
+   UTILITIES
+   ══════════════════════════════════════════════════════════════════════════ */
+
+.jp-divider { height: 1px; background: var(--neu-shadow-dark); opacity: 0.3; margin: 16px 0; }
+.jp-grid-2 { display:grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.jp-grid-3 { display:grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+.jp-row { display: flex; align-items: center; gap: 10px; }
+.jp-stack { display: flex; flex-direction: column; gap: 10px; }
+.hidden { display: none !important; }
+
+
+/* ══════════════════════════════════════════════════════════════════════════
+   NEUMORPHIC SPECIALS
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* raised circular icon container */
+.neu-icon {
+  width: 36px; height: 36px;
+  border-radius: 10px;
+  display: grid; place-items: center;
+  background: var(--neu-bg);
+  box-shadow: var(--neu-raised-sm);
+}
+
+/* concave well (for content areas) */
+.neu-well {
+  background: var(--neu-bg);
+  border-radius: 14px;
+  padding: 16px;
+  box-shadow: var(--neu-pressed);
+}
+
+/* floating badge */
+.neu-badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 3px 10px;
+  border-radius: 8px;
+  background: var(--neu-bg);
+  box-shadow: var(--neu-raised-sm);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+/* modal overlay background */
+.neu-modal-bg {
+  position: fixed; inset: 0;
+  background: rgba(45,52,64,0.5);
+  backdrop-filter: blur(6px);
+  z-index: 100;
+  display: flex; align-items: center; justify-content: center;
+}
+
+/* modal panel */
+.neu-modal {
+  background: var(--neu-bg);
+  border-radius: var(--jp-radius-lg);
+  padding: 28px;
+  box-shadow: var(--neu-raised-lg);
+  max-height: 85vh;
+  overflow-y: auto;
+}
+
+/* toggle switch (neumorphic) */
+.neu-toggle {
+  width: 44px; height: 24px;
+  border-radius: 12px;
+  background: var(--neu-bg);
+  box-shadow: var(--neu-pressed-sm);
+  position: relative;
+  cursor: pointer;
+  transition: all .2s ease;
+}
+.neu-toggle::after {
+  content: '';
+  position: absolute;
+  width: 18px; height: 18px;
+  border-radius: 50%;
+  background: var(--neu-bg);
+  top: 3px; left: 3px;
+  box-shadow: var(--neu-raised-sm);
+  transition: transform .2s ease;
+}
+.neu-toggle.on { background: var(--jp-primary-50); }
+.neu-toggle.on::after {
+  transform: translateX(20px);
+  background: var(--jp-primary);
+  box-shadow: 0 2px 6px rgba(108,99,255,0.3);
+}
+
+/* toast notification */
+.neu-toast {
+  background: var(--neu-bg);
+  border-radius: 14px;
+  padding: 12px 22px;
+  box-shadow: var(--neu-raised-lg);
+  font-size: 14px;
+  font-weight: 500;
+  display: flex; align-items: center; gap: 10px;
+  color: var(--jp-emerald);
+}

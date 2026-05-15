@@ -1,0 +1,25 @@
+# ============================================================================
+# JobPilot — Apify Configuration
+# ============================================================================
+# Get your token from: https://console.apify.com/account/integrations
+# Or set APIFY_TOKEN environment variable instead.
+# ============================================================================
+
+# Your Apify API token (paste it here or use env var APIFY_TOKEN)
+token: "apify_api_YOUR_TOKEN_HERE"
+
+# Actor IDs for each platform
+actors:
+  linkedin: "curious_coder~linkedin-jobs-scraper"
+  indeed: "misceres/indeed-scraper"
+  glassdoor: "epctex/glassdoor-scraper"
+
+# Default search settings
+defaults:
+  location: "United States"
+  max_results: 100
+  search_terms:
+    - "Product Manager"
+    - "Technical Program Manager"
+    - "UX Designer"
+    - "Software Engineer"

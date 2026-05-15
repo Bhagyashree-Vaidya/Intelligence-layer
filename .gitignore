@@ -1,0 +1,41 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# Database
+job_app/data/jobs.db
+*.db
+*.sqlite3
+
+# Uploaded resumes (user data)
+job_app/data/resumes/
+
+# Scraped data exports
+filtered_jobs.csv
+filtered_jobs.json
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment / secrets
+.env
+*.env

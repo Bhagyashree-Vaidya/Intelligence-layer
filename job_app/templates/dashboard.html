@@ -1,0 +1,404 @@
+{% extends "base.html" %}
+{% block title %}Jobs — JobPilot{% endblock %}
+{% block crumb_page %}Jobs{% endblock %}
+
+{% block topbar_right %}
+<button onclick="rescoreAll()" class="jp-btn sm ghost" id="rescore-btn">
+  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/><path d="M3 21v-5h5"/></svg>
+  <span>Rescore</span>
+</button>
+<button onclick="openScrapeModal()" id="scrape-btn" class="jp-btn primary">
+  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 1.9 5.6L19.5 10.5l-5.6 1.9L12 18l-1.9-5.6L4.5 10.5l5.6-1.9z"/><path d="M19 17v4M21 19h-4M5 3v2M6 4H4"/></svg>
+  <span>Fetch new jobs</span>
+</button>
+<div id="scrape-indicator" class="hidden" style="display:none; align-items:center; gap:8px; font-size:13px; color:var(--jp-primary); font-weight:500">
+  <div style="width:8px; height:8px; border-radius:50%; background:var(--jp-primary); animation:pulse 1.5s infinite"></div>
+  <span id="scrape-msg">Scraping...</span>
+</div>
+{% endblock %}
+
+{% block content %}
+<div style="padding:28px 36px 60px">
+
+  <!-- Page header -->
+  <div style="display:flex; align-items:flex-end; justify-content:space-between; margin-bottom:24px">
+    <div>
+      <div class="jp-eyebrow" style="margin-bottom:8px">
+        <span style="color:var(--jp-emerald)">&#9679;</span> Live · {{ stats.companies }} companies indexed
+      </div>
+      <h1 class="jp-display">
+        <span style="font-family:var(--jp-mono); font-size:44px; font-weight:500">{{ "{:,}".format(total) }}</span>
+        <span style="color:var(--jp-dim); font-style:italic">open roles</span>
+      </h1>
+      <div style="margin-top:8px; color:var(--jp-dim); font-size:15px">
+        Across <strong style="color:var(--jp-ink)">{{ stats.companies }} companies</strong> ·
+        <strong style="color:var(--jp-ink)">{{ stats.applications }} applied</strong>
+      </div>
+    </div>
+  </div>
+
+  <!-- Filter card (raised neumorphic surface) -->
+  <form method="get" action="/" class="jp-card" style="padding:22px; margin-bottom:22px">
+    <div style="display:grid; grid-template-columns:2fr 1fr 1fr 1fr auto; gap:14px; align-items:end">
+      <div class="jp-field">
+        <label class="label">Search</label>
+        <div class="jp-input-wrap">
+          <span class="ic"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg></span>
+          <input class="jp-input with-icon" name="q" value="{{ q }}" placeholder="Title or keyword...">
+        </div>
+      </div>
+      <div class="jp-field">
+        <label class="label">Company</label>
+        <input class="jp-input" name="company" value="{{ company }}" placeholder="e.g. Stripe">
+      </div>
+      <div class="jp-field">
+        <label class="label">Location</label>
+        <input class="jp-input" name="location" value="{{ location }}" placeholder="e.g. Remote">
+      </div>
+      <div class="jp-field">
+        <label class="label">Role</label>
+        <input class="jp-input" name="role" value="{{ role }}" placeholder="e.g. PM">
+      </div>
+      <button type="submit" class="jp-btn dark" style="height:46px">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M22 3H2l8 10v6l4 2v-8z"/></svg>
+        <span>Filter</span>
+      </button>
+    </div>
+
+    <div style="display:flex; align-items:center; justify-content:space-between; gap:18px; margin-top:18px; padding-top:18px; border-top:1px solid rgba(163,177,198,0.3)">
+      <div style="display:flex; align-items:center; gap:14px">
+        <span class="jp-eyebrow">Posted</span>
+        <div class="jp-seg">
+          {% for val, label in [("24h","24h"),("48h","48h"),("7d","7 days"),("30d","30 days"),("","All")] %}
+          <button type="submit" name="freshness" value="{{ val }}" class="{{ 'on' if freshness == val else '' }}">{{ label }}</button>
+          {% endfor %}
+        </div>
+      </div>
+      <div style="display:flex; align-items:center; gap:14px">
+        <span class="jp-eyebrow">Sort</span>
+        <div class="jp-seg">
+          {% for val, label in [("relevancy","Match"),("date","Date"),("company","Company")] %}
+          <button type="submit" name="sort" value="{{ val }}" class="{{ 'on' if sort == val else '' }}">{{ label }}</button>
+          {% endfor %}
+        </div>
+      </div>
+      {% if q or company or location or role or freshness %}
+      <a href="/" class="jp-btn sm ghost" style="color:var(--jp-dim); text-decoration:none">Clear all</a>
+      {% endif %}
+    </div>
+    <input type="hidden" name="sort" value="{{ sort }}">
+    <input type="hidden" name="freshness" value="{{ freshness }}">
+  </form>
+
+  <!-- Job cards -->
+  {% if jobs %}
+  <div style="display:flex; flex-direction:column; gap:16px">
+    {% for job in jobs %}
+    <article class="jp-card" style="padding:22px; display:grid; grid-template-columns:auto 1fr auto; gap:22px; position:relative">
+      <!-- Match ring (raised circular element) -->
+      <div style="display:flex; flex-direction:column; align-items:center; gap:14px">
+        {% set rs = job.relevancy_score or 0 %}
+        {% if rs >= 75 %}{% set tone = '#27ae60' %}{% elif rs >= 50 %}{% set tone = '#6c63ff' %}{% elif rs >= 25 %}{% set tone = '#e2a03f' %}{% else %}{% set tone = '#8e99a0' %}{% endif %}
+        <div style="width:60px; height:60px; border-radius:50%; background:var(--neu-bg);
+                    box-shadow:var(--neu-raised); display:grid; place-items:center; position:relative">
+          <svg width="56" height="56" style="position:absolute; inset:2px; transform:rotate(-90deg)">
+            <circle cx="28" cy="28" r="23" stroke="var(--neu-bg-2)" stroke-width="4" fill="none"/>
+            <circle cx="28" cy="28" r="23" stroke="{{ tone }}" stroke-width="4" fill="none"
+                    stroke-linecap="round"
+                    stroke-dasharray="{{ (144.5 * rs / 100)|round(1) }} 144.5"/>
+          </svg>
+          <span class="jp-mono" style="position:relative; font-size:13px; font-weight:600; color:{{ tone }}">{{ rs }}<span style="font-size:8px; margin-left:1px; opacity:.7">%</span></span>
+        </div>
+        <div class="jp-co lg">{{ job.company[:2]|upper }}</div>
+      </div>
+
+      <!-- Main info -->
+      <div style="min-width:0">
+        <div style="display:flex; align-items:center; gap:10px; margin-bottom:6px">
+          <span style="font-size:14px; color:var(--jp-dim); font-weight:500">{{ job.company }}</span>
+          <span style="width:3px; height:3px; background:var(--jp-mute); border-radius:50%"></span>
+          {% if job.department %}
+          <span style="font-size:13px; color:var(--jp-mute)">{{ job.department }}</span>
+          {% endif %}
+          {% if job.id in applied_ids %}
+          <span class="jp-chip emerald" style="height:22px; padding:0 10px; font-size:11.5px">
+            <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+            Applied
+          </span>
+          {% endif %}
+          {% if rs >= 85 %}
+          <span class="jp-chip emerald" style="height:22px; padding:0 10px; font-size:11.5px">
+            <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 1.9 5.6L19.5 10.5l-5.6 1.9L12 18l-1.9-5.6L4.5 10.5l5.6-1.9z"/></svg>
+            Top match
+          </span>
+          {% endif %}
+        </div>
+
+        <h2 class="jp-h2" style="margin-bottom:8px">{{ job.title }}</h2>
+
+        <div style="display:flex; align-items:center; gap:14px; color:var(--jp-dim); font-size:13.5px; margin-bottom:10px">
+          {% if job.location %}
+          <span style="display:inline-flex; align-items:center; gap:5px">
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 7-8 13-8 13s-8-6-8-13a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
+            {{ job.location }}
+          </span>
+          {% endif %}
+        </div>
+
+        {% if job.description %}
+        <p style="color:var(--jp-dim); font-size:14.5px; margin:0; line-height:1.55; max-width:760px">
+          {{ job.description[:200] }}{% if job.description|length > 200 %}...{% endif %}
+        </p>
+        {% endif %}
+
+        <!-- Tags row -->
+        <div style="display:flex; gap:8px; margin-top:14px; flex-wrap:wrap">
+          {% if job.salary_range %}
+          <span class="jp-chip ghost" style="height:24px; font-size:12px">{{ job.salary_range }}</span>
+          {% endif %}
+          {% if job.employment_type %}
+          <span class="jp-chip ghost" style="height:24px; font-size:12px">{{ job.employment_type }}</span>
+          {% endif %}
+          {% if job.freshness %}
+          <span class="jp-chip ghost" style="height:24px; font-size:12px">{{ job.freshness.label }}</span>
+          {% endif %}
+          {% for kw in job.keywords_list[:6] %}
+            {% if kw.startswith('+') %}
+            <span class="jp-chip ghost" style="height:24px; font-size:12px">{{ kw[1:] }}</span>
+            {% else %}
+            <span class="jp-chip primary" style="height:24px; font-size:12px">{{ kw }}</span>
+            {% endif %}
+          {% endfor %}
+        </div>
+      </div>
+
+      <!-- Actions column (raised buttons) -->
+      <div style="display:flex; flex-direction:column; gap:10px; min-width:140px">
+        {% if job.url and job.id not in applied_ids %}
+        <a href="{{ job.url }}" target="_blank" rel="noopener" class="jp-btn primary" style="text-decoration:none">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><path d="M15 3h6v6M10 14 21 3"/></svg>
+          <span>Apply</span>
+        </a>
+        {% elif job.id in applied_ids %}
+        <span class="jp-btn sm" style="background:var(--jp-emerald-50); color:var(--jp-emerald); pointer-events:none; box-shadow:var(--neu-raised-sm)">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+          <span>Applied</span>
+        </span>
+        {% endif %}
+        <button onclick="findRecruiter({{ job.id }}, '{{ job.company }}')" class="jp-btn sm">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-4 0v7h-4v-7a6 6 0 0 1 6-6z"/><rect x="2" y="9" width="4" height="12"/><circle cx="4" cy="4" r="2"/></svg>
+          <span>Recruiter</span>
+        </button>
+        <button onclick="draftMessage({{ job.id }})" class="jp-btn sm">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-10 7L2 7"/></svg>
+          <span>Message</span>
+        </button>
+        <button onclick="saveJob({{ job.id }})" class="jp-btn sm ghost" style="color:var(--jp-dim)">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="m19 21-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
+          <span>Save</span>
+        </button>
+      </div>
+    </article>
+    {% endfor %}
+  </div>
+
+  <!-- Pagination -->
+  {% if total_pages > 1 %}
+  <div style="display:flex; justify-content:center; margin-top:24px; gap:12px; align-items:center">
+    {% if page > 1 %}
+    <a href="?q={{ q }}&company={{ company }}&location={{ location }}&role={{ role }}&freshness={{ freshness }}&sort={{ sort }}&page={{ page - 1 }}" class="jp-btn" style="text-decoration:none">
+      &laquo; Prev
+    </a>
+    {% endif %}
+    <span class="neu-badge">
+      <span class="jp-mono" style="font-size:13px; color:var(--jp-dim)">Page {{ page }} of {{ total_pages }}</span>
+    </span>
+    {% if page < total_pages %}
+    <a href="?q={{ q }}&company={{ company }}&location={{ location }}&role={{ role }}&freshness={{ freshness }}&sort={{ sort }}&page={{ page + 1 }}" class="jp-btn" style="text-decoration:none">
+      Next &raquo;
+    </a>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  {% else %}
+  <!-- Empty state -->
+  <div style="text-align:center; padding:80px 0; color:var(--jp-mute)">
+    <div style="width:80px; height:80px; border-radius:50%; background:var(--neu-bg);
+                box-shadow:var(--neu-raised-lg); display:grid; place-items:center; margin:0 auto 20px">
+      <svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" style="opacity:.5"><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M3 12h18"/></svg>
+    </div>
+    <p style="font-size:18px; font-weight:500; margin:0 0 6px; color:var(--jp-ink)">No jobs match your filters</p>
+    <p style="font-size:14px; margin:0">Adjust filters or click <strong>Fetch new jobs</strong></p>
+  </div>
+  {% endif %}
+</div>
+
+<!-- Scrape modal (neumorphic) -->
+<div id="scrape-modal" class="hidden" style="position:fixed; inset:0; background:rgba(45,52,64,0.5); backdrop-filter:blur(6px); z-index:50; display:none; align-items:center; justify-content:center">
+  <div class="neu-modal" style="width:100%; max-width:480px">
+    <h3 class="jp-h2" style="margin-bottom:18px">Scrape Settings</h3>
+    <form id="scrape-form" style="display:flex; flex-direction:column; gap:16px">
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px">
+        <div class="jp-field">
+          <label class="label">Look back</label>
+          <select name="hours" class="jp-input" style="padding-right:10px; cursor:pointer">
+            <option value="24" selected>Last 24 hours</option>
+            <option value="48">Last 48 hours</option>
+            <option value="168">Last 7 days</option>
+          </select>
+        </div>
+        <div class="jp-field">
+          <label class="label">Role filters</label>
+          <input class="jp-input" name="roles" placeholder="pm,swe,ux,tpm">
+        </div>
+      </div>
+      <div style="display:flex; gap:12px; padding-top:4px">
+        <button type="submit" class="jp-btn primary" style="flex:1">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg>
+          Start Scraping
+        </button>
+        <button type="button" onclick="closeScrapeModal()" class="jp-btn">Cancel</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Message modal (neumorphic) -->
+<div id="msg-modal" class="hidden" style="position:fixed; inset:0; background:rgba(45,52,64,0.5); backdrop-filter:blur(6px); z-index:50; display:none; align-items:center; justify-content:center">
+  <div class="neu-modal" style="width:100%; max-width:520px">
+    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:18px">
+      <h3 class="jp-h2" style="margin:0">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="var(--jp-primary)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-3px; margin-right:8px"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-10 7L2 7"/></svg>
+        Outreach Message
+      </h3>
+      <button onclick="closeMsgModal()" class="jp-btn sm ghost" style="width:36px; height:36px; padding:0">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="jp-field" style="margin-bottom:14px">
+      <label class="label">Contact name</label>
+      <input class="jp-input" id="msg-contact" value="[Name]" onchange="regenerateMessage()">
+    </div>
+    <div class="jp-field" style="margin-bottom:14px">
+      <label class="label">Message</label>
+      <textarea class="jp-input jp-textarea" id="msg-body" rows="10" style="font-family:var(--jp-mono); font-size:13px"></textarea>
+    </div>
+    <div style="display:flex; flex-wrap:wrap; gap:8px; margin-bottom:14px">
+      <a id="msg-recruiter-link" href="#" target="_blank" class="jp-btn sm" style="text-decoration:none; color:var(--jp-primary)">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-4 0v7h-4v-7a6 6 0 0 1 6-6z"/><rect x="2" y="9" width="4" height="12"/><circle cx="4" cy="4" r="2"/></svg>
+        Find Recruiter
+      </a>
+      <a id="msg-hm-link" href="#" target="_blank" class="jp-btn sm" style="text-decoration:none; color:var(--jp-primary)">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21a8 8 0 1 0-16 0"/><circle cx="12" cy="8" r="5"/></svg>
+        Find Hiring Manager
+      </a>
+    </div>
+    <div style="display:flex; gap:10px">
+      <button onclick="copyMessage()" class="jp-btn primary" style="flex:1">Copy Message</button>
+      <button onclick="closeMsgModal()" class="jp-btn">Close</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let currentMsgJobId = null;
+
+function openScrapeModal() {
+  const m = document.getElementById('scrape-modal');
+  m.classList.remove('hidden');
+  m.style.display = 'flex';
+}
+function closeScrapeModal() {
+  const m = document.getElementById('scrape-modal');
+  m.classList.add('hidden');
+  m.style.display = 'none';
+}
+
+document.getElementById('scrape-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  closeScrapeModal();
+  const fd = new FormData(e.target);
+  const resp = await fetch('/api/scrape/all', {method:'POST', body:fd});
+  if (resp.ok) {
+    const si = document.getElementById('scrape-indicator');
+    si.classList.remove('hidden');
+    si.style.display = 'flex';
+    document.getElementById('scrape-btn').disabled = true;
+    pollScrape();
+  }
+});
+
+async function pollScrape() {
+  const data = await (await fetch('/api/scrape/status')).json();
+  if (data.running) {
+    document.getElementById('scrape-msg').textContent = data.progress || 'Scraping...';
+    setTimeout(pollScrape, 2000);
+  } else {
+    document.getElementById('scrape-indicator').style.display = 'none';
+    document.getElementById('scrape-btn').disabled = false;
+    if (data.last_result) showToast(data.last_result, 5000);
+    location.reload();
+  }
+}
+
+async function rescoreAll() {
+  const btn = document.getElementById('rescore-btn');
+  btn.disabled = true;
+  btn.querySelector('span').textContent = 'Scoring...';
+  const data = await (await fetch('/api/rescore', {method:'POST'})).json();
+  btn.disabled = false;
+  btn.querySelector('span').textContent = 'Rescore';
+  showToast('Rescored ' + data.rescored + ' jobs');
+  location.reload();
+}
+
+function saveJob(id) {
+  fetch('/api/track/'+id, {method:'POST', body:new URLSearchParams({status:'saved'})});
+  showToast('Job saved');
+}
+
+function findRecruiter(id, company) {
+  const q = encodeURIComponent('recruiter ' + company);
+  window.open('https://www.linkedin.com/search/results/people/?keywords=' + q + '&origin=GLOBAL_SEARCH_HEADER', '_blank');
+}
+
+async function draftMessage(id) {
+  currentMsgJobId = id;
+  const contact = document.getElementById('msg-contact').value || '[Name]';
+  const data = await (await fetch('/api/jobs/'+id+'/message', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({contact_name: contact}),
+  })).json();
+  document.getElementById('msg-body').value = data.message;
+  document.getElementById('msg-recruiter-link').href = data.recruiter_url;
+  document.getElementById('msg-hm-link').href = data.hiring_manager_url;
+  const m = document.getElementById('msg-modal');
+  m.classList.remove('hidden');
+  m.style.display = 'flex';
+}
+
+function regenerateMessage() { if (currentMsgJobId) draftMessage(currentMsgJobId); }
+function closeMsgModal() {
+  const m = document.getElementById('msg-modal');
+  m.classList.add('hidden');
+  m.style.display = 'none';
+}
+function copyMessage() {
+  navigator.clipboard.writeText(document.getElementById('msg-body').value);
+  showToast('Copied to clipboard');
+}
+
+fetch('/api/scrape/status').then(r=>r.json()).then(d => {
+  if (d.running) {
+    const si = document.getElementById('scrape-indicator');
+    si.classList.remove('hidden');
+    si.style.display = 'flex';
+    document.getElementById('scrape-btn').disabled = true;
+    pollScrape();
+  }
+});
+</script>
+{% endblock %}

@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}JobPilot{% endblock %}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Newsreader:ital,wght@0,400;0,500;0,600;1,400;1,500&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/app.css">
+  <style>
+    html, body { margin:0; padding:0; height:100%; }
+    .fade-in { animation: fadeIn .3s ease-out; }
+    @keyframes fadeIn { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:none; } }
+    @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:.4; } }
+  </style>
+  {% block head %}{% endblock %}
+</head>
+<body class="jp-app" style="height:100%">
+
+<div class="jp-shell" style="height:100%">
+  <!-- ═══ Sidebar (dark neumorphic) ═══ -->
+  <aside class="jp-sidebar">
+    <a href="/" class="jp-brand">
+      <span class="mark">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M21 16v-2l-8-5V3.5a1.5 1.5 0 0 0-3 0V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1L15 22v-1.5L13 19v-5.5z"/></svg>
+      </span>
+      <span>JobPilot</span>
+      <span class="ver">v3.0</span>
+    </a>
+
+    <nav style="display:flex; flex-direction:column; gap:4px">
+      <div class="jp-nav-section">Workspace</div>
+      <a href="/" class="jp-nav-item {% if request.url.path == '/' %}active{% endif %}">
+        <span class="ic"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M3 12h18"/></svg></span>
+        <span>Jobs</span>
+        <span class="count">{{ stats.jobs if stats else '—' }}</span>
+      </a>
+      <a href="/applications" class="jp-nav-item {% if request.url.path == '/applications' %}active{% endif %}">
+        <span class="ic"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2 11 13"/><path d="m22 2-7 20-4-9-9-4Z"/></svg></span>
+        <span>Applied</span>
+        <span class="count">{{ stats.applications if stats else '—' }}</span>
+      </a>
+
+      <div class="jp-nav-section">Account</div>
+      <a href="/profile" class="jp-nav-item {% if request.url.path == '/profile' %}active{% endif %}">
+        <span class="ic"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21a8 8 0 1 0-16 0"/><circle cx="12" cy="8" r="5"/></svg></span>
+        <span>Profile & Resumes</span>
+      </a>
+    </nav>
+
+    <!-- Pilot card (raised from dark surface) -->
+    <div class="jp-pilot-card" style="margin-top:auto">
+      <div class="jp-pilot-row" style="margin-bottom:12px">
+        <div class="jp-pilot-avatar">BV</div>
+        <div class="jp-pilot-meta" style="flex:1; min-width:0">
+          <div class="name">Bhagyashree Vaidya</div>
+          <div class="role">Level 14 · Commander</div>
+        </div>
+      </div>
+      <div style="display:flex; justify-content:space-between; font-family:var(--jp-mono); font-size:10.5px; color:var(--neu-dark-mute); letter-spacing:0.05em; margin-bottom:6px">
+        <span>XP</span><span>740 / 1,000</span>
+      </div>
+      <div class="jp-bar dark">
+        <div class="fill" style="width:74%; background:linear-gradient(90deg, #a78bfa, #6c63ff)"></div>
+      </div>
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-top:10px">
+        <div style="display:flex; align-items:center; gap:5px; color:#fbbf24; font-size:12px; font-weight:500">
+          <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 17c1.5 0 3-1 3-3 0-2-2-3-2-5 0-1.5 1-2 1-2-2 0-4 1-4 4 0 1-1 1-1 1s-1-.5-1-1.5C5 8 8 7 8 4c0-.5 0-1-.5-1.5C10 3 14 4 14 9c0 2-1 3-1 4 0 2 2 3 4 3"/><path d="M12 22c-5 0-9-3-9-9 0-3 2-6 5-7"/></svg>
+          <span>12-day streak</span>
+        </div>
+        <span class="jp-mono" style="font-size:10.5px; color:var(--neu-dark-mute)">260 XP to LVL 15</span>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ═══ Main content ═══ -->
+  <div class="jp-main" style="display:flex; flex-direction:column; overflow:hidden">
+    <!-- Topbar -->
+    <div class="jp-topbar">
+      <div class="jp-crumb">
+        {% block crumbs %}
+        <span>Workspace</span>
+        <span style="color:var(--jp-mute)">/</span>
+        <span class="here">{% block crumb_page %}Dashboard{% endblock %}</span>
+        {% endblock %}
+      </div>
+      <div style="margin-left:auto; display:flex; align-items:center; gap:12px">
+        {% block topbar_right %}{% endblock %}
+      </div>
+    </div>
+
+    <!-- Content -->
+    <div style="flex:1; overflow:auto" class="fade-in">
+      {% block content %}{% endblock %}
+    </div>
+  </div>
+</div>
+
+<!-- Toast (neumorphic) -->
+<div id="toast" class="hidden" style="position:fixed; top:80px; right:24px; z-index:999">
+  <div class="neu-toast">
+    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+    <span id="toast-msg"></span>
+  </div>
+</div>
+
+<script>
+function showToast(msg, ms=3000) {
+  const t = document.getElementById('toast');
+  document.getElementById('toast-msg').textContent = msg;
+  t.classList.remove('hidden');
+  setTimeout(() => t.classList.add('hidden'), ms);
+}
+const params = new URLSearchParams(location.search);
+if (params.get('saved'))    showToast('Profile saved');
+if (params.get('uploaded')) showToast('Resume uploaded');
+if (params.get('deleted'))  showToast('Resume deleted');
+</script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

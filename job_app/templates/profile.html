@@ -1,0 +1,378 @@
+{% extends "base.html" %}
+{% block title %}Profile & Resumes — JobPilot{% endblock %}
+{% block crumb_page %}Profile & Resumes{% endblock %}
+
+{% block topbar_right %}
+<button type="submit" form="profile-form" class="jp-btn sm primary">
+  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+  <span>Save Profile</span>
+</button>
+{% endblock %}
+
+{% block content %}
+<div style="flex:1; overflow:auto; padding: 28px 36px 60px">
+
+  <div style="display:grid; grid-template-columns:1fr 300px; gap:28px; align-items:start">
+
+    <!-- ═══ LEFT: Profile form ═══ -->
+    <div>
+      <div style="margin-bottom: 24px">
+        <div class="jp-eyebrow" style="margin-bottom: 8px">Pilot Profile</div>
+        <h1 class="jp-display" style="font-size: 36px">
+          <span style="font-style:italic; color:var(--jp-dim)">Your</span> Profile
+        </h1>
+        <div style="margin-top: 8px; color:var(--jp-dim); font-size: 15px">
+          This data auto-fills job applications via the Chrome extension.
+        </div>
+      </div>
+
+      <form method="post" action="/api/profile" id="profile-form">
+
+        <!-- ── Personal Info (raised card) ── -->
+        <div class="jp-card" style="padding: 26px; margin-bottom: 20px">
+          <div style="display:flex; align-items:center; gap: 12px; margin-bottom: 20px">
+            <div class="neu-icon" style="color:var(--jp-primary)">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21a8 8 0 1 0-16 0"/><circle cx="12" cy="8" r="5"/></svg>
+            </div>
+            <span style="font-weight:600; font-size:16px">Personal Info</span>
+          </div>
+          <div class="jp-grid-2" style="gap:16px">
+            <div class="jp-field">
+              <label class="label">First Name <span class="req">*</span></label>
+              <input class="jp-input" type="text" name="first_name" value="{{ profile.first_name or '' }}" required>
+            </div>
+            <div class="jp-field">
+              <label class="label">Last Name <span class="req">*</span></label>
+              <input class="jp-input" type="text" name="last_name" value="{{ profile.last_name or '' }}" required>
+            </div>
+            <div class="jp-field">
+              <label class="label">Email <span class="req">*</span></label>
+              <input class="jp-input" type="email" name="email" value="{{ profile.email or '' }}" required>
+            </div>
+            <div class="jp-field">
+              <label class="label">Phone</label>
+              <input class="jp-input" type="tel" name="phone" value="{{ profile.phone or '' }}">
+            </div>
+          </div>
+        </div>
+
+        <!-- ── Address ── -->
+        <div class="jp-card" style="padding: 26px; margin-bottom: 20px">
+          <div style="display:flex; align-items:center; gap: 12px; margin-bottom: 20px">
+            <div class="neu-icon" style="color:var(--jp-amber)">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+            </div>
+            <span style="font-weight:600; font-size:16px">Address</span>
+          </div>
+          <div style="display:grid; gap:16px">
+            <div class="jp-field">
+              <label class="label">Street Address</label>
+              <input class="jp-input" type="text" name="address" value="{{ profile.address or '' }}">
+            </div>
+            <div class="jp-grid-2" style="gap:16px">
+              <div class="jp-field">
+                <label class="label">City</label>
+                <input class="jp-input" type="text" name="city" value="{{ profile.city or '' }}">
+              </div>
+              <div class="jp-grid-2" style="gap:16px">
+                <div class="jp-field">
+                  <label class="label">State</label>
+                  <input class="jp-input" type="text" name="state" value="{{ profile.state or '' }}">
+                </div>
+                <div class="jp-field">
+                  <label class="label">Zip</label>
+                  <input class="jp-input" type="text" name="zip_code" value="{{ profile.zip_code or '' }}">
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── Professional ── -->
+        <div class="jp-card" style="padding: 26px; margin-bottom: 20px">
+          <div style="display:flex; align-items:center; gap: 12px; margin-bottom: 20px">
+            <div class="neu-icon" style="color:var(--jp-violet)">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+            </div>
+            <span style="font-weight:600; font-size:16px">Professional</span>
+          </div>
+          <div class="jp-grid-2" style="gap:16px">
+            <div class="jp-field">
+              <label class="label">Current Company</label>
+              <input class="jp-input" type="text" name="current_company" value="{{ profile.current_company or '' }}">
+            </div>
+            <div class="jp-field">
+              <label class="label">Current Title</label>
+              <input class="jp-input" type="text" name="current_title" value="{{ profile.current_title or '' }}" placeholder="e.g. Software Engineer">
+            </div>
+            <div class="jp-field">
+              <label class="label">LinkedIn URL</label>
+              <input class="jp-input" type="url" name="linkedin" value="{{ profile.linkedin or '' }}" placeholder="https://linkedin.com/in/...">
+            </div>
+            <div class="jp-field">
+              <label class="label">Website / Portfolio</label>
+              <input class="jp-input" type="url" name="website" value="{{ profile.website or '' }}">
+            </div>
+            <div class="jp-field">
+              <label class="label">GitHub</label>
+              <input class="jp-input" type="url" name="github" value="{{ profile.github or '' }}">
+            </div>
+            <div class="jp-field">
+              <label class="label">Years of Experience</label>
+              <div style="display:flex; align-items:center; gap:14px">
+                <div style="flex:1; background:var(--neu-bg); border-radius:12px; padding:12px 16px; box-shadow:var(--neu-pressed)">
+                  <input type="range" name="years_experience" min="0" max="30" value="{{ profile.years_experience or 0 }}"
+                         oninput="document.getElementById('yoe-val').textContent=this.value"
+                         style="width:100%; height:6px; -webkit-appearance:none; appearance:none; background:transparent; cursor:pointer">
+                </div>
+                <div style="width:50px; height:50px; border-radius:14px; background:var(--neu-bg);
+                            box-shadow:var(--neu-raised-sm); display:grid; place-items:center">
+                  <span id="yoe-val" class="jp-mono" style="font-size:20px; font-weight:600">{{ profile.years_experience or 0 }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="jp-field" style="margin-top: 16px">
+            <label class="label">Skills <span class="help">(comma-separated, used for relevancy scoring)</span></label>
+            <input class="jp-input" type="text" name="skills" value="{{ profile.skills or '' }}" placeholder="Python, JavaScript, React, SQL, Product Management...">
+          </div>
+        </div>
+
+        <!-- ── Work Authorization ── -->
+        <div class="jp-card" style="padding: 26px; margin-bottom: 20px">
+          <div style="display:flex; align-items:center; gap: 12px; margin-bottom: 20px">
+            <div class="neu-icon" style="color:var(--jp-emerald)">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            </div>
+            <span style="font-weight:600; font-size:16px">Work Authorization</span>
+          </div>
+          <div class="jp-grid-2" style="gap:16px">
+            <div class="jp-field">
+              <label class="label">Work Authorization</label>
+              <select class="jp-input" name="work_auth" style="cursor:pointer">
+                {% for opt in ['Authorized', 'US Citizen', 'Green Card', 'H1B', 'OPT', 'F1 CPT', 'Other'] %}
+                <option {% if profile.work_auth == opt %}selected{% endif %}>{{ opt }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="jp-field">
+              <label class="label">Need Sponsorship?</label>
+              <select class="jp-input" name="sponsorship" style="cursor:pointer">
+                {% for opt in ['No', 'Yes', 'Now or in the future'] %}
+                <option {% if profile.sponsorship == opt %}selected{% endif %}>{{ opt }}</option>
+                {% endfor %}
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── EEO ── -->
+        <div class="jp-card" style="padding: 26px; margin-bottom: 20px">
+          <div style="display:flex; align-items:center; gap: 12px; margin-bottom: 20px">
+            <div class="neu-icon" style="color:var(--jp-mute)">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/></svg>
+            </div>
+            <span style="font-weight:600; font-size:16px">EEO</span>
+            <span class="jp-chip ghost" style="font-size:11px; height:22px">Optional</span>
+          </div>
+          <div class="jp-grid-3" style="gap:16px">
+            <div class="jp-field">
+              <label class="label">Gender</label>
+              <select class="jp-input" name="gender" style="cursor:pointer">
+                <option value="">Prefer not to say</option>
+                {% for opt in ['Male', 'Female', 'Non-binary', 'Other'] %}
+                <option {% if profile.gender == opt %}selected{% endif %}>{{ opt }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="jp-field">
+              <label class="label">Veteran Status</label>
+              <select class="jp-input" name="veteran" style="cursor:pointer">
+                <option value="">Prefer not to say</option>
+                {% for opt in ['Not a veteran', 'Veteran', 'Protected veteran'] %}
+                <option {% if profile.veteran == opt %}selected{% endif %}>{{ opt }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="jp-field">
+              <label class="label">Disability</label>
+              <select class="jp-input" name="disability" style="cursor:pointer">
+                <option value="">Prefer not to say</option>
+                {% for opt in ['No', 'Yes'] %}
+                <option {% if profile.disability == opt %}selected{% endif %}>{{ opt }}</option>
+                {% endfor %}
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── Cover Letter ── -->
+        <div class="jp-card" style="padding: 26px; margin-bottom: 20px">
+          <div style="display:flex; align-items:center; gap: 12px; margin-bottom: 20px">
+            <div class="neu-icon" style="color:var(--jp-primary)">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+            </div>
+            <span style="font-weight:600; font-size:16px">Default Cover Letter</span>
+          </div>
+          <textarea class="jp-input jp-textarea" name="cover_letter_default" rows="5"
+                    placeholder="A general cover letter the extension can paste when needed...">{{ profile.cover_letter_default or '' }}</textarea>
+        </div>
+
+        <!-- Save button (tactile primary) -->
+        <div style="display:flex; gap:14px; align-items:center">
+          <button type="submit" class="jp-btn primary lg">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+            Save Profile
+          </button>
+          <span style="color:var(--jp-mute); font-size:13px">Changes auto-fill into job applications</span>
+        </div>
+      </form>
+    </div>
+
+    <!-- ═══ RIGHT: Sidebar widgets ═══ -->
+    <div style="position:sticky; top:28px">
+
+      <!-- Completeness meter (raised card) -->
+      {% set filled = namespace(n=0, total=12) %}
+      {% if profile.first_name %}{% set filled.n = filled.n + 1 %}{% endif %}
+      {% if profile.last_name %}{% set filled.n = filled.n + 1 %}{% endif %}
+      {% if profile.email %}{% set filled.n = filled.n + 1 %}{% endif %}
+      {% if profile.phone %}{% set filled.n = filled.n + 1 %}{% endif %}
+      {% if profile.city %}{% set filled.n = filled.n + 1 %}{% endif %}
+      {% if profile.state %}{% set filled.n = filled.n + 1 %}{% endif %}
+      {% if profile.current_company %}{% set filled.n = filled.n + 1 %}{% endif %}
+      {% if profile.current_title %}{% set filled.n = filled.n + 1 %}{% endif %}
+      {% if profile.linkedin %}{% set filled.n = filled.n + 1 %}{% endif %}
+      {% if profile.skills %}{% set filled.n = filled.n + 1 %}{% endif %}
+      {% if profile.cover_letter_default %}{% set filled.n = filled.n + 1 %}{% endif %}
+      {% if profile.work_auth %}{% set filled.n = filled.n + 1 %}{% endif %}
+      {% set pct = (filled.n * 100 / filled.total)|round|int %}
+
+      <div class="jp-card" style="padding:22px; margin-bottom:20px">
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:14px">
+          <span style="font-weight:600; font-size:14px">Profile completeness</span>
+          <!-- Circular progress (neumorphic ring) -->
+          <div style="width:48px; height:48px; border-radius:50%; background:var(--neu-bg);
+                      box-shadow:var(--neu-raised-sm); display:grid; place-items:center; position:relative">
+            <svg width="44" height="44" style="position:absolute; inset:2px; transform:rotate(-90deg)">
+              <circle cx="22" cy="22" r="18" stroke="var(--neu-bg-2)" stroke-width="3" fill="none"/>
+              <circle cx="22" cy="22" r="18" stroke="{{ 'var(--jp-emerald)' if pct >= 80 else 'var(--jp-amber)' if pct >= 50 else 'var(--jp-rose)' }}" stroke-width="3" fill="none"
+                      stroke-linecap="round"
+                      stroke-dasharray="{{ (113 * pct / 100)|round(1) }} 113"/>
+            </svg>
+            <span class="jp-mono" style="position:relative; font-size:11px; font-weight:600;
+                  color:{{ 'var(--jp-emerald)' if pct >= 80 else 'var(--jp-amber)' if pct >= 50 else 'var(--jp-rose)' }}">{{ pct }}%</span>
+          </div>
+        </div>
+        {% set missing = [] %}
+        {% if not profile.current_title %}{% set _ = missing.append('Current Title') %}{% endif %}
+        {% if not profile.skills %}{% set _ = missing.append('Skills') %}{% endif %}
+        {% if not profile.linkedin %}{% set _ = missing.append('LinkedIn') %}{% endif %}
+        {% if not profile.cover_letter_default %}{% set _ = missing.append('Cover Letter') %}{% endif %}
+        {% if not profile.phone %}{% set _ = missing.append('Phone') %}{% endif %}
+        {% if missing %}
+        <div style="font-size:12.5px; color:var(--jp-dim)">
+          <span style="font-weight:500">Missing:</span>
+          {{ missing|join(', ') }}
+        </div>
+        {% else %}
+        <div style="font-size:12.5px; color:var(--jp-emerald); font-weight:500">All key fields filled!</div>
+        {% endif %}
+      </div>
+
+      <!-- Resumes (raised card) -->
+      <div class="jp-card" style="padding:22px; margin-bottom:20px">
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:14px">
+          <span style="font-weight:600; font-size:14px">Resumes</span>
+          <button class="jp-btn sm ghost" onclick="document.getElementById('upload-modal').style.display='flex'">
+            <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Upload
+          </button>
+        </div>
+
+        {% if resumes %}
+        <div style="display:flex; flex-direction:column; gap:10px">
+          {% for r in resumes %}
+          <div style="display:flex; align-items:center; gap:10px; padding:12px 14px;
+                      background:var(--neu-bg); border-radius:12px;
+                      box-shadow:var(--neu-raised-sm); transition: box-shadow .2s ease">
+            <div class="neu-icon" style="color:var(--jp-dim); flex-shrink:0">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+            </div>
+            <div style="flex:1; min-width:0">
+              <div style="font-size:13px; font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis">{{ r.original_name }}</div>
+              <div style="display:flex; gap:4px; margin-top:4px">
+                {% if r.is_default %}
+                <span class="jp-chip emerald" style="height:20px; font-size:10px; padding:0 8px">Default</span>
+                {% endif %}
+                {% for tag in r.role_tags.split(',') if tag.strip() %}
+                <span class="jp-chip ghost" style="height:20px; font-size:10px; padding:0 8px">{{ tag.strip() }}</span>
+                {% endfor %}
+              </div>
+            </div>
+            <form method="post" action="/api/resumes/{{ r.id }}/delete"
+                  onsubmit="return confirm('Delete this resume?')" style="margin:0">
+              <button type="submit" style="background:transparent; border:0; cursor:pointer; color:var(--jp-mute); padding:4px">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+              </button>
+            </form>
+          </div>
+          {% endfor %}
+        </div>
+        {% else %}
+        <div style="text-align:center; padding:20px 0; color:var(--jp-mute); font-size:13px">
+          No resumes uploaded yet
+        </div>
+        {% endif %}
+      </div>
+
+      <!-- Extension card (raised gradient) -->
+      <div style="background:linear-gradient(135deg, var(--jp-primary), #8b5cf6); border-radius:var(--jp-radius);
+                  padding:22px; color:#fff; box-shadow: 6px 6px 14px rgba(108,99,255,0.25), -6px -6px 14px var(--neu-shadow-light)">
+        <div style="display:flex; align-items:center; gap:8px; margin-bottom:10px">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+          <span style="font-weight:600; font-size:14px">Chrome Extension</span>
+        </div>
+        <div style="font-size:13px; color:rgba(255,255,255,0.8); line-height:1.5; margin-bottom:12px">
+          Install the JobPilot extension to auto-fill applications when you click Apply Now.
+        </div>
+        <div style="font-size:12px; color:rgba(255,255,255,0.65); line-height:1.6">
+          1. Open <code style="background:rgba(255,255,255,0.15); padding:1px 4px; border-radius:3px">chrome://extensions</code><br>
+          2. Enable Developer Mode<br>
+          3. Load unpacked &rarr; <code style="background:rgba(255,255,255,0.15); padding:1px 4px; border-radius:3px">extension/</code>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ Resume upload modal (neumorphic) ═══ -->
+<div id="upload-modal" style="display:none; position:fixed; inset:0; background:rgba(45,52,64,0.5); backdrop-filter:blur(6px); z-index:100; align-items:center; justify-content:center">
+  <div class="neu-modal" style="width:420px">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px">
+      <span style="font-weight:600; font-size:16px">Upload Resume</span>
+      <button onclick="this.closest('#upload-modal').style.display='none'"
+              class="jp-btn sm ghost" style="width:36px; height:36px; padding:0">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <form method="post" action="/api/resumes/upload" enctype="multipart/form-data">
+      <div class="jp-field" style="margin-bottom:16px">
+        <label class="label">File (PDF / DOCX)</label>
+        <input class="jp-input" type="file" name="file" accept=".pdf,.docx,.doc" required
+               style="padding:12px 16px; height:auto">
+      </div>
+      <div class="jp-field" style="margin-bottom:16px">
+        <label class="label">Role tags</label>
+        <input class="jp-input" type="text" name="role_tags" placeholder="pm, swe, design">
+        <span class="help">Comma-separated. Extension picks the right resume per role.</span>
+      </div>
+      <label style="display:flex; align-items:center; gap:10px; font-size:14px; color:var(--jp-ink-2); margin-bottom:20px; cursor:pointer">
+        <input type="checkbox" name="is_default" value="on" style="accent-color:var(--jp-primary)">
+        Set as default resume
+      </label>
+      <button type="submit" class="jp-btn primary block">Upload Resume</button>
+    </form>
+  </div>
+</div>
+{% endblock %}

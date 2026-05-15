@@ -1,0 +1,288 @@
+{% extends "base.html" %}
+{% block title %}Applied — JobPilot{% endblock %}
+{% block crumb_page %}Applied{% endblock %}
+
+{% block topbar_right %}
+<button class="jp-btn sm ghost" onclick="exportCSV()">
+  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+  <span>Export CSV</span>
+</button>
+<button class="jp-btn sm primary" onclick="document.getElementById('add-modal').style.display='flex'">
+  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+  <span>Add manually</span>
+</button>
+{% endblock %}
+
+{% block content %}
+<div style="flex:1; overflow:auto; padding: 28px 36px 60px">
+
+  <!-- ═══ Headline ═══ -->
+  <div style="display:flex; align-items:flex-end; justify-content:space-between; margin-bottom: 24px">
+    <div>
+      <div class="jp-eyebrow" style="margin-bottom: 8px">Mission Tracker</div>
+      <h1 class="jp-display">
+        <span style="font-style:italic; color:var(--jp-dim)">Tracking</span>
+        <span class="jp-mono" style="font-size: 44px; font-weight: 500">{{ app_stats.total }}</span>
+        <span style="color:var(--jp-dim); font-style:italic">applications</span>
+      </h1>
+      <div style="margin-top: 8px; color:var(--jp-dim); font-size: 15px">
+        <strong style="color:var(--jp-emerald)">{{ app_stats.reply_rate }}%</strong> reply rate
+        · {{ app_stats.interviews }} active interview{{ 's' if app_stats.interviews != 1 else '' }}
+        · {{ app_stats.offers }} offer{{ 's' if app_stats.offers != 1 else '' }} pending
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ KPI strip (raised neumorphic cards) ═══ -->
+  <div class="jp-grid-3" style="margin-bottom: 20px; grid-template-columns:repeat(5,1fr)">
+    {% set kpis = [
+      ('Sent', app_stats.sent, 'total submitted', ''),
+      ('Reply rate', app_stats.reply_rate ~ '%', 'got a response', 'emerald'),
+      ('Interviews', app_stats.interviews, app_stats.by_status.screen ~ ' in screen', 'primary'),
+      ('Offers', app_stats.offers, 'pending decision', 'amber'),
+      ('Streak', '12 d', 'iron resolve', 'amber'),
+    ] %}
+    {% for label, value, sub, tone in kpis %}
+    <div class="jp-card" style="padding: 20px">
+      <div class="jp-eyebrow" style="margin-bottom: 6px">{{ label }}</div>
+      <div class="jp-mono" style="font-size: 28px; font-weight: 600; letter-spacing:-0.01em;
+                  color:{{ 'var(--jp-emerald)' if tone == 'emerald' else 'var(--jp-primary)' if tone == 'primary' else 'var(--jp-amber)' if tone == 'amber' else 'var(--jp-ink)' }}">{{ value }}</div>
+      <div style="font-size: 12.5px; color:var(--jp-mute); margin-top: 2px">{{ sub }}</div>
+    </div>
+    {% endfor %}
+  </div>
+
+  <!-- ═══ Status filter tabs (neumorphic toggle strip) ═══ -->
+  <div style="display:flex; align-items:center; gap: 6px; margin-bottom: 16px; padding-bottom:14px; border-bottom:1px solid rgba(163,177,198,0.3)">
+    {% set tabs = [
+      ('', 'All', app_stats.by_status.all),
+      ('saved', 'Saved', app_stats.by_status.saved),
+      ('applied', 'Applied', app_stats.by_status.applied),
+      ('screen', 'Screen', app_stats.by_status.screen),
+      ('interview', 'Interview', app_stats.by_status.interview),
+      ('offer', 'Offer', app_stats.by_status.offer),
+      ('rejected', 'Rejected', app_stats.by_status.rejected),
+    ] %}
+    {% for val, label, count in tabs %}
+    <a href="/applications{% if val %}?status={{ val }}{% endif %}"
+       style="text-decoration:none;
+              padding: 10px 16px;
+              font-size: 14px; font-weight: 500;
+              border-radius: 12px;
+              color: {{ 'var(--jp-ink)' if current_status == val else 'var(--jp-dim)' }};
+              background: var(--neu-bg);
+              box-shadow: {{ 'var(--neu-pressed-sm)' if current_status == val else 'var(--neu-raised-sm)' }};
+              display:flex; align-items:center; gap: 8px;
+              transition: all .15s ease;">
+      {{ label }}
+      <span style="font-family:var(--jp-mono); font-size: 11px;
+                    background: {{ 'var(--jp-primary-50)' if current_status == val else 'var(--neu-bg-2)' }};
+                    color: {{ 'var(--jp-primary)' if current_status == val else 'var(--jp-mute)' }};
+                    padding:2px 8px; border-radius: 8px;
+                    box-shadow: {{ 'none' if current_status == val else 'var(--neu-pressed-sm)' }}">{{ count }}</span>
+    </a>
+    {% endfor %}
+
+    <div style="margin-left:auto; display:flex; gap: 8px">
+      <div class="jp-input-wrap" style="width: 240px">
+        <span class="ic"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg></span>
+        <input class="jp-input with-icon" placeholder="Search applications..." style="height: 38px" id="app-search" oninput="filterTable(this.value)">
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ Table (neumorphic rows) ═══ -->
+  {% if applications %}
+  <div style="overflow:hidden">
+    <table class="jp-table" id="app-table">
+      <thead>
+        <tr>
+          <th style="width: 36px"></th>
+          <th>Company</th>
+          <th>Role</th>
+          <th>Location</th>
+          <th>Resume</th>
+          <th>Pipeline</th>
+          <th>Status</th>
+          <th>Applied</th>
+          <th style="width: 44px"></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for app in applications %}
+        <tr class="app-row" data-company="{{ app.company|lower }}" data-title="{{ app.title|lower }}">
+          <td style="padding-left: 16px">
+            <input type="checkbox" style="accent-color:var(--jp-primary)">
+          </td>
+          <td>
+            <div style="display:flex; align-items:center; gap: 10px">
+              <div class="jp-co">{{ app.company[:2]|upper }}</div>
+              <div>
+                <div style="font-weight: 600; font-size: 14px">{{ app.company }}</div>
+                {% if app.stage >= 3 %}
+                <div style="font-size: 11px; color:var(--jp-rose); font-weight: 500; display:inline-flex; align-items:center; gap: 4px; margin-top: 1px">
+                  <span>&#9679;</span> Final round
+                </div>
+                {% endif %}
+              </div>
+            </div>
+          </td>
+          <td>
+            <div style="font-weight: 500; color:var(--jp-ink)">{{ app.title }}</div>
+            {% if app.status == 'interview' %}
+            <div style="font-size: 12px; color:var(--jp-primary); margin-top: 2px">&#8599; Interview scheduled</div>
+            {% elif app.status == 'screen' %}
+            <div style="font-size: 12px; color:var(--jp-violet); margin-top: 2px">&#8599; Recruiter screen</div>
+            {% elif app.status == 'offer' %}
+            <div style="font-size: 12px; color:var(--jp-emerald); margin-top: 2px">&#8599; Offer received</div>
+            {% endif %}
+          </td>
+          <td style="color:var(--jp-dim)">{{ app.location or '—' }}</td>
+          <td>
+            {% if app.resume_name %}
+            <div style="display:inline-flex; align-items:center; gap: 6px; color:var(--jp-dim); font-size: 13px">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+              <span style="font-family:var(--jp-mono); font-size: 12.5px">{{ app.resume_name }}</span>
+            </div>
+            {% else %}
+            <span style="color:var(--jp-mute)">—</span>
+            {% endif %}
+          </td>
+          <td>
+            <!-- Pipeline segments (neumorphic mini bars) -->
+            {% set tone_map = {
+              'rejected': 'var(--jp-rose)',
+              'offer': 'var(--jp-emerald)',
+              'interview': 'var(--jp-amber)',
+              'screen': 'var(--jp-violet)',
+              'applied': 'var(--jp-primary)',
+              'saved': 'var(--jp-mute)'
+            } %}
+            {% set tone = tone_map.get(app.status, 'var(--jp-mute)') %}
+            <div style="display:flex; gap: 4px">
+              {% for i in range(5) %}
+              <div style="height: 8px; width: 28px; border-radius: 4px;
+                          background: var(--neu-bg);
+                          box-shadow: {{ 'none' if i < app.stage else 'var(--neu-pressed-sm)' }}">
+                {% if i < app.stage %}
+                <div style="height:100%; width:100%; border-radius:4px; background:{{ tone }};
+                            box-shadow: 0 0 6px {{ tone }}40"></div>
+                {% endif %}
+              </div>
+              {% endfor %}
+            </div>
+          </td>
+          <td>
+            <!-- Status badge (neumorphic chip with dropdown) -->
+            {% set badge_map = {
+              'saved':     ('ghost',   'Saved'),
+              'applied':   ('primary', 'Applied'),
+              'screen':    ('violet',  'Screen'),
+              'interview': ('amber',   'Interview'),
+              'offer':     ('emerald', 'Offer'),
+              'rejected':  ('rose',    'Rejected'),
+            } %}
+            {% set badge_tone, badge_label = badge_map.get(app.status, ('ghost', app.status)) %}
+            <div style="position:relative" class="status-wrap">
+              <button class="jp-chip {{ badge_tone }}" onclick="this.nextElementSibling.classList.toggle('hidden')" style="cursor:pointer; padding-right: 6px">
+                <span class="dot"></span>
+                <span>{{ badge_label }}</span>
+                <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+              </button>
+              <div class="hidden" style="position:absolute; top:100%; left:0; z-index:10; margin-top:6px;
+                                         background:var(--neu-bg);
+                                         border-radius:14px; padding:6px;
+                                         box-shadow:var(--neu-raised-lg);
+                                         min-width:140px">
+                {% for s in ['saved','applied','screen','interview','offer','rejected'] %}
+                <form method="post" action="/api/applications/{{ app.id }}/status" style="margin:0">
+                  <input type="hidden" name="status" value="{{ s }}">
+                  <button type="submit" style="width:100%; text-align:left; padding:8px 12px; font-size:13px;
+                                                background:{{ 'var(--neu-bg)' }};
+                                                box-shadow:{{ 'var(--neu-pressed-sm)' if s == app.status else 'none' }};
+                                                border:0; border-radius:10px; cursor:pointer; color:var(--jp-ink);
+                                                font-family:var(--jp-sans); margin-bottom:2px;
+                                                transition: box-shadow .15s ease">
+                    {{ s|capitalize }}
+                  </button>
+                </form>
+                {% endfor %}
+              </div>
+            </div>
+          </td>
+          <td style="color:var(--jp-dim); font-family:var(--jp-mono); font-size: 13px">
+            {{ app.applied_at[:10] if app.applied_at else '' }}
+          </td>
+          <td>
+            {% if app.url %}
+            <a href="{{ app.url }}" target="_blank" rel="noopener"
+               class="jp-btn sm ghost"
+               style="width: 34px; height: 34px; padding:0; display:grid; place-items:center; text-decoration:none; color:var(--jp-dim)">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+            </a>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% else %}
+  <!-- Empty state (neumorphic) -->
+  <div style="padding: 80px 32px; text-align:center">
+    <div style="width:80px; height:80px; border-radius:50%; background:var(--neu-bg);
+                box-shadow:var(--neu-raised-lg); display:grid; place-items:center; margin:0 auto 20px; color:var(--jp-mute)">
+      <svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2 11 13"/><path d="m22 2-7 20-4-9-9-4Z"/></svg>
+    </div>
+    <div style="font-size: 18px; font-weight: 600; margin-bottom: 6px">No applications yet</div>
+    <div style="color:var(--jp-dim); font-size: 15px; max-width:340px; margin:0 auto">
+      Apply to jobs from the dashboard — they'll appear here automatically as tracked missions.
+    </div>
+    <a href="/" class="jp-btn primary" style="margin-top: 20px; text-decoration:none">Browse Jobs</a>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('.status-wrap')) {
+    document.querySelectorAll('.status-wrap > div:not(.hidden)').forEach(el => {
+      if (!el.classList.contains('jp-chip')) el.classList.add('hidden');
+    });
+  }
+});
+
+function filterTable(q) {
+  q = q.toLowerCase();
+  document.querySelectorAll('.app-row').forEach(row => {
+    const co = row.dataset.company || '';
+    const title = row.dataset.title || '';
+    row.style.display = (!q || co.includes(q) || title.includes(q)) ? '' : 'none';
+  });
+}
+
+function exportCSV() {
+  const rows = [['Company','Role','Location','Resume','Status','Applied']];
+  document.querySelectorAll('.app-row').forEach(row => {
+    const cells = row.querySelectorAll('td');
+    rows.push([
+      cells[1]?.textContent.trim().split('\n')[0],
+      cells[2]?.textContent.trim().split('\n')[0],
+      cells[3]?.textContent.trim(),
+      cells[4]?.textContent.trim(),
+      cells[6]?.textContent.trim().split('\n')[0],
+      cells[7]?.textContent.trim(),
+    ]);
+  });
+  const csv = rows.map(r => r.map(c => `"${(c||'').replace(/"/g,'""')}"`).join(',')).join('\n');
+  const blob = new Blob([csv], {type:'text/csv'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'jobpilot_applications.csv';
+  a.click();
+}
+</script>
+{% endblock %}

@@ -1,0 +1,185 @@
+{
+  "greenhouse": {
+    "asana": "asana",
+    "datadog": "datadog",
+    "cloudflare": "cloudflare",
+    "okta": "okta",
+    "pagerduty": "pagerduty",
+    "gitlab": "gitlab",
+    "postman": "postman",
+    "smartsheet": "smartsheet",
+    "hubspot": "hubspot",
+    "intercom": "intercom",
+    "braze": "braze",
+    "checkr": "checkr",
+    "stripe": "stripe",
+    "brex": "brex",
+    "mercury": "mercury",
+    "affirm": "affirm",
+    "chime": "chime",
+    "robinhood": "robinhood",
+    "marqeta": "marqeta",
+    "gemini": "gemini",
+    "monzo": "monzo",
+    "n26": "n26",
+    "sofi": "sofi",
+    "toast": "toast",
+    "billcom": "billcom",
+    "carta": "carta",
+    "anthropic": "anthropic",
+    "databricks": "databricks",
+    "mongodb": "mongodb",
+    "scaleai": "scaleai",
+    "fivetran": "fivetran",
+    "elastic": "elastic",
+    "spacex": "spacex",
+    "amplitude": "amplitude",
+    "mixpanel": "mixpanel",
+    "gongio": "gongio",
+    "airbnb": "airbnb",
+    "discord": "discord",
+    "reddit": "reddit",
+    "figma": "figma",
+    "instacart": "instacart",
+    "pinterest": "pinterest",
+    "duolingo": "duolingo",
+    "peloton": "peloton",
+    "lyft": "lyft",
+    "roblox": "roblox",
+    "coursera": "coursera",
+    "medium": "medium",
+    "auth0": "okta",
+    "circle": "circleci",
+    "dbtlabs": "dbtlabsinc",
+    "grafana": "grafanalabs",
+    "anduril": "andurilindustries",
+    "segment": "twilio",
+    "drift": "salesloft"
+  },
+  "lever": {
+    "atlassian": "atlassian",
+    "freshworks": "freshworks",
+    "plaid": "plaid",
+    "kraken": "kraken",
+    "wealthfront": "wealthfront",
+    "clari": "clari",
+    "palantir": "palantir",
+    "spotify": "spotify"
+  },
+  "ashby": {
+    "docker": "docker",
+    "ramp": "ramp",
+    "openai": "openai",
+    "snowflake": "snowflake",
+    "confluent": "confluent",
+    "notion": "notion",
+    "quora": "quora",
+    "strava": "strava",
+    "perplexityai": "perplexity"
+  },
+  "smartrecruiters": {
+    "hashicorp": "HashiCorp",
+    "zendesk": "Zendesk",
+    "revolut": "Revolut",
+    "klarna": "Klarna1",
+    "grammarly": "Grammarly"
+  },
+  "workday": {
+    "salesforce": {
+      "host": "salesforce.wd12.myworkdayjobs.com",
+      "company": "salesforce",
+      "board": "External_Career_Site"
+    },
+    "slack": {
+      "host": "salesforce.wd12.myworkdayjobs.com",
+      "company": "salesforce",
+      "board": "External_Career_Site",
+      "note": "Slack = Salesforce"
+    },
+    "zoom": {
+      "host": "zoom.wd5.myworkdayjobs.com",
+      "company": "zoom",
+      "board": "Zoom"
+    },
+    "etsy": {
+      "host": "etsy.wd5.myworkdayjobs.com",
+      "company": "etsy",
+      "board": "Etsy_Careers"
+    },
+    "uber": {
+      "host": "uber.wd5.myworkdayjobs.com",
+      "company": "uber",
+      "board": "Uber"
+    },
+    "coinbase": {
+      "host": "coinbase.wd1.myworkdayjobs.com",
+      "company": "coinbase",
+      "board": "Coinbase"
+    },
+    "doordash": {
+      "host": "doordash.wd1.myworkdayjobs.com",
+      "company": "doordash",
+      "board": "DoorDash"
+    },
+    "box": {
+      "host": "box.wd1.myworkdayjobs.com",
+      "company": "box",
+      "board": "Box"
+    },
+    "snapchat": {
+      "host": "snap.wd5.myworkdayjobs.com",
+      "company": "snap",
+      "board": "Snap"
+    },
+    "canva": {
+      "host": "canva.wd1.myworkdayjobs.com",
+      "company": "canva",
+      "board": "Canva"
+    },
+    "bumble": {
+      "host": "bumble.wd3.myworkdayjobs.com",
+      "company": "bumble",
+      "board": "Bumble"
+    },
+    "tinder": {
+      "host": "matchgroup.wd1.myworkdayjobs.com",
+      "company": "matchgroup",
+      "board": "MatchGroup",
+      "note": "Tinder = Match Group"
+    },
+    "bolt": {
+      "host": "bolt.wd3.myworkdayjobs.com",
+      "company": "bolt",
+      "board": "Bolt"
+    }
+  },
+  "workable": {
+    "huggingface": "huggingface"
+  },
+  "custom": {
+    "looker": {
+      "note": "Looker = Google, use careers.google.com"
+    },
+    "warbyparker": {
+      "careers_url": "https://www.warbyparker.com/jobs"
+    },
+    "checkout": {
+      "careers_url": "https://www.checkout.com/careers"
+    },
+    "thoughtspot": {
+      "careers_url": "https://www.thoughtspot.com/careers"
+    },
+    "alteryx": {
+      "careers_url": "https://www.alteryx.com/careers"
+    },
+    "snyk": {
+      "careers_url": "https://snyk.io/careers"
+    },
+    "chainalysis": {
+      "careers_url": "https://www.chainalysis.com/careers"
+    },
+    "ironclad": {
+      "careers_url": "https://ironcladapp.com/careers"
+    }
+  }
+}
