@@ -1,10 +1,14 @@
 """JobPilot — Job dashboard + profile API for the Chrome extension."""
 
+import sys
 import asyncio
 import shutil
 import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
+
+# Ensure sibling modules are importable (needed for Vercel deployment)
+sys.path.insert(0, str(Path(__file__).parent))
 
 from fastapi import FastAPI, Request, UploadFile, File, Form, HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
