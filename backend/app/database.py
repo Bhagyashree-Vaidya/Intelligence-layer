@@ -1,0 +1,278 @@
+"""Supabase database layer — replaces SQLite with hosted PostgreSQL.
+
+All queries use the Supabase Python client. Tables are created via
+Supabase dashboard or the migration script in backend/scripts/migrate.py.
+"""
+
+import json
+from datetime import datetime, timezone
+
+from supabase import create_client, Client
+
+from app.config import get_settings
+from app.logger import log
+
+_client: Client | None = None
+
+
+def get_db() -> Client:
+    global _client
+    if _client is None:
+        s = get_settings()
+        _client = create_client(s.supabase_url, s.supabase_service_role_key)
+        log.info("Supabase client initialized")
+    return _client
+
+
+# ── Profile ──────────────────────────────────────────────────────────────────
+
+async def get_profile() -> dict:
+    db = get_db()
+    resp = db.table("profile").select("*").eq("id", 1).execute()
+    if resp.data:
+        row = resp.data[0]
+        if isinstance(row.get("education"), str):
+            row["education"] = json.loads(row["education"] or "[]")
+        return row
+    return {}
+
+
+async def update_profile(data: dict):
+    db = get_db()
+    fields = [
+        "first_name", "last_name", "email", "phone",
+        "address", "city", "state", "zip_code", "country",
+        "linkedin", "website", "github",
+        "current_company", "current_title", "years_experience",
+        "education", "skills", "cover_letter_default",
+        "work_auth", "sponsorship", "gender", "race", "veteran", "disability",
+    ]
+    update = {}
+    for f in fields:
+        if f in data:
+            val = data[f]
+            if f == "education" and isinstance(val, list):
+                val = json.dumps(val)
+            update[f] = val
+    update["updated_at"] = datetime.now(timezone.utc).isoformat()
+
+    db.table("profile").upsert({"id": 1, **update}).execute()
+    log.info("Profile updated")
+
+
+# ── Resumes ──────────────────────────────────────────────────────────────────
+
+async def get_resumes() -> list[dict]:
+    db = get_db()
+    resp = (
+        db.table("resumes")
+        .select("*")
+        .order("is_default", desc=True)
+        .order("uploaded_at", desc=True)
+        .execute()
+    )
+    return resp.data or []
+
+
+async def add_resume(filename: str, original_name: str, role_tags: str, is_default: bool) -> int:
+    db = get_db()
+    if is_default:
+        db.table("resumes").update({"is_default": False}).neq("id", 0).execute()
+    resp = db.table("resumes").insert({
+        "filename": filename,
+        "original_name": original_name,
+        "role_tags": role_tags,
+        "is_default": is_default,
+        "uploaded_at": datetime.now(timezone.utc).isoformat(),
+    }).execute()
+    return resp.data[0]["id"] if resp.data else 0
+
+
+async def delete_resume(resume_id: int) -> str | None:
+    db = get_db()
+    resp = db.table("resumes").select("filename").eq("id", resume_id).execute()
+    if resp.data:
+        filename = resp.data[0]["filename"]
+        db.table("resumes").delete().eq("id", resume_id).execute()
+        return filename
+    return None
+
+
+# ── Jobs ─────────────────────────────────────────────────────────────────────
+
+async def upsert_jobs(jobs: list[dict]) -> int:
+    db = get_db()
+    now = datetime.now(timezone.utc).isoformat()
+    count = 0
+
+    for j in jobs:
+        row = {
+            "greenhouse_id": str(j.get("greenhouse_id", j.get("id", ""))),
+            "company": str(j.get("company", "")),
+            "title": str(j.get("title", "")),
+            "location": str(j.get("location", "")),
+            "department": str(j.get("department", "")),
+            "url": str(j.get("url", "")),
+            "description": str(j.get("description", ""))[:10000],
+            "updated_at": str(j.get("updated_at", "")),
+            "first_published": str(j.get("first_published", "")),
+            "employment_type": str(j.get("employment_type", "")),
+            "salary_range": str(j.get("salary_range", "")),
+            "scraped_at": now,
+        }
+        db.table("jobs").upsert(
+            row,
+            on_conflict="greenhouse_id,company",
+        ).execute()
+        count += 1
+
+    log.info(f"Upserted {count} jobs")
+    return count
+
+
+async def search_jobs(
+    query: str = "", company: str = "", location: str = "", role: str = "",
+    freshness: str = "", sort: str = "relevancy", page: int = 1, per_page: int = 40,
+) -> tuple[list[dict], int]:
+    db = get_db()
+    q = db.table("jobs").select("*", count="exact")
+
+    if query:
+        q = q.or_(f"title.ilike.%{query}%,description.ilike.%{query}%")
+    if company:
+        q = q.ilike("company", f"%{company}%")
+    if location:
+        q = q.ilike("location", f"%{location}%")
+    if role:
+        q = q.ilike("title", f"%{role}%")
+    if freshness:
+        hours_map = {"24h": 24, "48h": 48, "7d": 168, "30d": 720}
+        hours = hours_map.get(freshness)
+        if hours:
+            from datetime import timedelta
+            cutoff = (datetime.now(timezone.utc) - timedelta(hours=hours)).isoformat()
+            q = q.gte("updated_at", cutoff)
+
+    if sort == "date":
+        q = q.order("updated_at", desc=True)
+    elif sort == "company":
+        q = q.order("company").order("relevancy_score", desc=True)
+    else:
+        q = q.order("relevancy_score", desc=True).order("updated_at", desc=True)
+
+    offset = (page - 1) * per_page
+    q = q.range(offset, offset + per_page - 1)
+    resp = q.execute()
+
+    total = resp.count if resp.count is not None else len(resp.data or [])
+    return resp.data or [], total
+
+
+async def get_job(job_id: int) -> dict | None:
+    db = get_db()
+    resp = db.table("jobs").select("*").eq("id", job_id).execute()
+    return resp.data[0] if resp.data else None
+
+
+# ── Applications ─────────────────────────────────────────────────────────────
+
+async def save_application(job_id: int, resume_id: int | None, status: str = "saved") -> int:
+    db = get_db()
+    resp = db.table("applications").insert({
+        "job_id": job_id,
+        "resume_id": resume_id,
+        "status": status,
+        "applied_at": datetime.now(timezone.utc).isoformat(),
+    }).execute()
+    return resp.data[0]["id"] if resp.data else 0
+
+
+async def update_application_status(app_id: int, status: str):
+    db = get_db()
+    db.table("applications").update({"status": status}).eq("id", app_id).execute()
+
+
+async def get_applications() -> list[dict]:
+    db = get_db()
+    resp = (
+        db.table("applications")
+        .select("*, jobs(title, company, location, url), resumes(original_name)")
+        .order("applied_at", desc=True)
+        .execute()
+    )
+    rows = []
+    for r in resp.data or []:
+        job = r.pop("jobs", {}) or {}
+        resume = r.pop("resumes", {}) or {}
+        rows.append({**r, **job, "resume_name": resume.get("original_name", "")})
+    return rows
+
+
+async def get_applied_job_ids() -> set[int]:
+    db = get_db()
+    resp = db.table("applications").select("job_id").execute()
+    return {r["job_id"] for r in resp.data or []}
+
+
+async def get_stats() -> dict:
+    db = get_db()
+    jobs_resp = db.table("jobs").select("id", count="exact").execute()
+    apps_resp = db.table("applications").select("id", count="exact").execute()
+    companies_resp = db.rpc("count_distinct_companies").execute()
+
+    return {
+        "jobs": jobs_resp.count or 0,
+        "applications": apps_resp.count or 0,
+        "companies": companies_resp.data[0]["count"] if companies_resp.data else 0,
+    }
+
+
+async def get_application_stats() -> dict:
+    db = get_db()
+    resp = db.table("applications").select("status").execute()
+    rows = resp.data or []
+
+    status_counts: dict[str, int] = {}
+    for r in rows:
+        s = r["status"]
+        status_counts[s] = status_counts.get(s, 0) + 1
+
+    total = sum(status_counts.values())
+    sent = total - status_counts.get("saved", 0)
+    interviews = status_counts.get("interview", 0)
+    offers = status_counts.get("offer", 0)
+    screens = status_counts.get("screen", 0)
+    responded = interviews + offers + screens + status_counts.get("rejected", 0)
+    reply_rate = round((responded / sent * 100), 1) if sent > 0 else 0
+
+    return {
+        "total": total, "sent": sent, "reply_rate": reply_rate,
+        "interviews": interviews, "offers": offers,
+        "by_status": {
+            "all": total,
+            "saved": status_counts.get("saved", 0),
+            "applied": status_counts.get("applied", 0),
+            "screen": screens,
+            "interview": interviews,
+            "offer": offers,
+            "rejected": status_counts.get("rejected", 0),
+        },
+    }
+
+
+async def rescore_all_jobs(profile: dict) -> int:
+    from app.services.relevancy_engine import score_job
+
+    db = get_db()
+    resp = db.table("jobs").select("id, title, description, location, department").execute()
+    rows = resp.data or []
+
+    for row in rows:
+        result = score_job(row, profile)
+        db.table("jobs").update({
+            "relevancy_score": result["relevancy_score"],
+            "keywords_matched": json.dumps(result["keywords_matched"]),
+        }).eq("id", row["id"]).execute()
+
+    log.info(f"Rescored {len(rows)} jobs")
+    return len(rows)

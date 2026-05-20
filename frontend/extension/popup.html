@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{width:320px;font-family:system-ui,sans-serif;background:#f9fafb;color:#111827}
+    .header{background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;padding:16px 18px}
+    .header h1{font-size:16px;font-weight:700}
+    .header p{font-size:11px;opacity:.8;margin-top:2px}
+    .body{padding:16px 18px}
+    .status{display:flex;align-items:center;gap:8px;padding:10px 14px;border-radius:10px;margin-bottom:12px;font-size:13px}
+    .status.ok{background:#ecfdf5;color:#065f46}
+    .status.err{background:#fef2f2;color:#991b1b}
+    .dot{width:8px;height:8px;border-radius:50%}
+    .dot.green{background:#22c55e}
+    .dot.red{background:#ef4444}
+    .profile-preview{font-size:12px;color:#6b7280;line-height:1.6;margin-bottom:14px}
+    .profile-preview strong{color:#111827}
+    .btn{display:block;width:100%;padding:10px;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;text-align:center;text-decoration:none;margin-bottom:8px}
+    .btn-primary{background:#6366f1;color:#fff}
+    .btn-primary:hover{background:#4f46e5}
+    .btn-outline{background:#fff;color:#6366f1;border:1px solid #e5e7eb}
+    .btn-outline:hover{background:#f5f3ff}
+    .resume{font-size:12px;color:#6b7280;background:#f3f4f6;padding:8px 12px;border-radius:8px;margin-bottom:12px}
+    .resume i{color:#6366f1;margin-right:4px}
+  </style>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+</head>
+<body>
+  <div class="header">
+    <h1><i class="fa-solid fa-rocket"></i> JobPilot</h1>
+    <p>Auto-fill job applications</p>
+  </div>
+  <div class="body">
+    <div id="status" class="status err">
+      <div class="dot red"></div>
+      Checking connection...
+    </div>
+    <div id="profile-info" class="profile-preview" style="display:none"></div>
+    <div id="resume-info" class="resume" style="display:none"></div>
+    <a href="http://127.0.0.1:8000/profile" target="_blank" class="btn btn-primary">
+      <i class="fa-solid fa-user-gear"></i> Edit Profile & Resumes
+    </a>
+    <a href="http://127.0.0.1:8000/" target="_blank" class="btn btn-outline">
+      <i class="fa-solid fa-briefcase"></i> Open Job Dashboard
+    </a>
+    <button id="fill-btn" class="btn btn-outline" style="display:none">
+      <i class="fa-solid fa-wand-magic-sparkles"></i> Fill This Page
+    </button>
+  </div>
+  <script src="popup.js"></script>
+</body>
+</html>

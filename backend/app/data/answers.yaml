@@ -1,0 +1,174 @@
+# ============================================================================
+# JobPilot — Custom Screening Question Answers
+# ============================================================================
+# Edit this file to control how JobPilot fills custom screening questions.
+#
+# Format:
+#   Each entry maps a question pattern → your answer.
+#   Patterns are case-insensitive and match partial text in the question label.
+#   Use "[skip]" to leave a field blank (you'll fill it manually).
+#
+# Special variables you can use in answers:
+#   {company}     — company name from the URL
+#   {role}        — job title from the page heading
+#   {first_name}  — your first name from profile
+#   {last_name}   — your last name from profile
+# ============================================================================
+
+# ── Common Yes/No Questions ─────────────────────────────────────────────────
+
+"Have you ever worked":
+  answer: "No"
+
+"Are you legally authorized to work":
+  answer: "Yes"
+
+"Will you now or in the future require sponsorship":
+  answer: "No"
+
+"Do you require visa sponsorship":
+  answer: "No"
+
+"Are you authorized to work in the United States":
+  answer: "Yes"
+
+"Are you at least 18 years of age":
+  answer: "Yes"
+
+"Are you willing to undergo a background check":
+  answer: "Yes"
+
+"Are you willing to take a drug test":
+  answer: "Yes"
+
+"Have you previously applied":
+  answer: "No"
+
+"Have you previously been employed":
+  answer: "No"
+
+"Are you willing to relocate":
+  answer: "Yes"
+
+"Are you currently under a non-compete":
+  answer: "No"
+
+"Are you subject to any non-compete":
+  answer: "No"
+
+# ── Experience & Skills ─────────────────────────────────────────────────────
+
+"years of experience":
+  answer: "3"
+
+"years of relevant experience":
+  answer: "3"
+
+"years of professional experience":
+  answer: "3"
+
+"highest level of education":
+  answer: "Master's Degree"
+
+"degree":
+  answer: "MS in Electrical and Computer Engineering"
+
+# ── How Did You Hear ────────────────────────────────────────────────────────
+
+"how did you hear":
+  answer: "Online Job Board"
+
+"where did you hear":
+  answer: "Online Job Board"
+
+"referred by":
+  answer: "[skip]"
+
+"referral":
+  answer: "[skip]"
+
+# ── Availability ────────────────────────────────────────────────────────────
+
+"start date":
+  answer: "[skip]"
+  # Leave blank — varies by situation
+
+"earliest start date":
+  answer: "[skip]"
+
+"notice period":
+  answer: "2 weeks"
+
+"available to start":
+  answer: "[skip]"
+
+# ── Salary / Compensation ──────────────────────────────────────────────────
+
+"salary expectation":
+  answer: "[skip]"
+  # NEVER auto-fill salary — always decide per-company
+
+"expected salary":
+  answer: "[skip]"
+
+"compensation expectation":
+  answer: "[skip]"
+
+"desired salary":
+  answer: "[skip]"
+
+"salary range":
+  answer: "[skip]"
+
+# ── Links & URLs ────────────────────────────────────────────────────────────
+
+"linkedin":
+  answer: "https://linkedin.com/in/bhagyashree"
+
+"github":
+  answer: "https://github.com/Bhagyashree-Vaidya"
+
+"website":
+  answer: "[skip]"
+
+"portfolio":
+  answer: "[skip]"
+
+# ── EEO / Demographics ─────────────────────────────────────────────────────
+# These are VOLUNTARY and should match what you've set in your profile.
+# Use "[skip]" if you prefer not to answer.
+
+"gender":
+  answer: "[skip]"
+
+"race":
+  answer: "[skip]"
+
+"ethnicity":
+  answer: "[skip]"
+
+"veteran status":
+  answer: "I am not a protected veteran"
+
+"disability":
+  answer: "I do not wish to answer"
+
+# ── Long-Form Questions (Company-Specific) ──────────────────────────────────
+# For "Why do you want to work here?" and similar questions,
+# the answer engine generates personalized answers using your profile
+# and company context. But you can override for specific companies:
+
+# Uncomment and customize:
+# "why do you want to work at stripe":
+#   answer: "I'm passionate about economic infrastructure and Stripe's mission
+#     of increasing the GDP of the internet directly aligns with my experience
+#     in product management at scale."
+
+# "why do you want to work at anthropic":
+#   answer: "I believe AI safety is the most important challenge of our time,
+#     and I want to contribute to building AI that is safe, beneficial, and
+#     well-understood."
+
+# ── Catch-All for Unknown Questions ─────────────────────────────────────────
+# If no pattern matches, the answer engine tries to generate an answer.
+# If it can't, the field is left blank for you to fill manually.

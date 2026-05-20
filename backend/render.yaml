@@ -1,0 +1,24 @@
+services:
+  - type: web
+    name: jobpilot-api
+    runtime: docker
+    repo: https://github.com/Bhagyashree-Vaidya/Intelligence-layer.git
+    rootDir: backend
+    dockerfilePath: ./Dockerfile
+    envVars:
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: CLAUDE_API
+        sync: false
+      - key: APIFY_TOKEN
+        sync: false
+      - key: FRONTEND_URL
+        value: https://shreevaidya.com
+      - key: ENVIRONMENT
+        value: production
+    healthCheckPath: /health
+    autoDeploy: true
