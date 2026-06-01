@@ -351,15 +351,17 @@ class WorkerSettings:
     ]
 
     cron_jobs = [
-        # Scan LinkedIn hiring posts every 4 hours
+        # ── SIGNALS: 6x/day (every 4h) — MAX discovery ──
         cron(run_signal_scan, hour={0, 4, 8, 12, 16, 20}, minute=15),
-        # Scrape all job sources every 6 hours (0:30, 6:30, 12:30, 18:30 UTC)
-        cron(run_scrape_all, hour={0, 6, 12, 18}, minute=30),
-        # Auto-apply every 6 hours, 1h after scrape (so fresh jobs are in DB)
-        # Runs at 1:45, 7:45, 13:45, 19:45 UTC
+
+        # ── JOBS: 6x/day (every 4h) — 200+ fresh jobs/day ──
+        cron(run_scrape_all, hour={0, 4, 8, 12, 16, 20}, minute=30),
+
+        # ── AUTO-APPLY: 4x/day ──
         cron(run_auto_apply, hour={1, 7, 13, 19}, minute=45),
-        # Coverage health check — runs 2h after each scrape to verify results
-        cron(run_health_check, hour={2, 8, 14, 20}, minute=30),
+
+        # ── HEALTH CHECK: 2x/day ──
+        cron(run_health_check, hour={6, 18}, minute=30),
     ]
 
     on_startup = startup

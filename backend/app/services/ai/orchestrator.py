@@ -15,24 +15,24 @@ from app.logger import log
 # ── Routing: which model handles what ─────────────────────────────────────
 
 async def classify_signal(post_content: str, author_info: str) -> dict[str, Any]:
-    """Classify a LinkedIn/social post for hiring intent. → OpenAI (fast, structured)"""
-    return await openai_client.complete_json(
+    """Classify a LinkedIn/social post for hiring intent. → Claude (logical, structured)"""
+    return await claude_client.complete_json(
         system=CLASSIFY_SIGNAL_SYSTEM,
         user=f"Author: {author_info}\n\nPost content:\n{post_content}",
     )
 
 
 async def enrich_job(title: str, company: str, description: str) -> dict[str, Any]:
-    """Extract structured metadata from job description. → OpenAI (structured extraction)"""
-    return await openai_client.complete_json(
+    """Extract structured metadata from job description. → Claude (logical extraction)"""
+    return await claude_client.complete_json(
         system=ENRICH_JOB_SYSTEM,
         user=f"Title: {title}\nCompany: {company}\n\nDescription:\n{description[:8000]}",
     )
 
 
 async def score_job(job_data: dict, profile_data: dict) -> dict[str, Any]:
-    """Multi-dimensional scoring. → OpenAI (numeric scoring, structured output)"""
-    return await openai_client.complete_json(
+    """Multi-dimensional scoring. → Claude (logical scoring, structured output)"""
+    return await claude_client.complete_json(
         system=SCORE_JOB_SYSTEM,
         user=f"Job:\n{_format_job(job_data)}\n\nCandidate Profile:\n{_format_profile(profile_data)}",
     )
@@ -42,33 +42,49 @@ async def generate_outreach(
     post_content: str, author_name: str, author_title: str,
     role_mentioned: str, user_profile: str,
 ) -> str:
-    """Generate personalized outreach message. → Claude (natural writing)"""
+    """Generate personalized outreach message. → OpenAI (creative writing).
+    Falls back to Claude if OpenAI is unavailable."""
+    prompt_user = (
+        f"Hiring post by {author_name} ({author_title}):\n{post_content}\n\n"
+        f"Role mentioned: {role_mentioned}\n\n"
+        f"My background:\n{user_profile}"
+    )
+    try:
+        if openai_client.is_available():
+            return await openai_client.complete(
+                system=OUTREACH_SYSTEM, user=prompt_user,
+            )
+    except Exception as e:
+        log.warning(f"OpenAI outreach failed, falling back to Claude: {e}")
     return await claude_client.complete(
-        system=OUTREACH_SYSTEM,
-        user=(
-            f"Hiring post by {author_name} ({author_title}):\n{post_content}\n\n"
-            f"Role mentioned: {role_mentioned}\n\n"
-            f"My background:\n{user_profile}"
-        ),
+        system=OUTREACH_SYSTEM, user=prompt_user,
     )
 
 
 async def generate_cover_letter(
     job_title: str, company: str, job_description: str, user_profile: str,
 ) -> str:
-    """Generate tailored cover letter. → Claude (persuasive writing)"""
+    """Generate tailored cover letter. → OpenAI (creative writing).
+    Falls back to Claude if OpenAI is unavailable."""
+    prompt_user = (
+        f"Job: {job_title} at {company}\n\n"
+        f"Description:\n{job_description[:4000]}\n\n"
+        f"My background:\n{user_profile}"
+    )
+    try:
+        if openai_client.is_available():
+            return await openai_client.complete(
+                system=COVER_LETTER_SYSTEM, user=prompt_user,
+            )
+    except Exception as e:
+        log.warning(f"OpenAI cover letter failed, falling back to Claude: {e}")
     return await claude_client.complete(
-        system=COVER_LETTER_SYSTEM,
-        user=(
-            f"Job: {job_title} at {company}\n\n"
-            f"Description:\n{job_description[:4000]}\n\n"
-            f"My background:\n{user_profile}"
-        ),
+        system=COVER_LETTER_SYSTEM, user=prompt_user,
     )
 
 
 async def analyze_outcome(outcome_data: dict) -> dict[str, Any]:
-    """Extract lessons from application outcome. → Claude (reasoning)"""
+    """Extract lessons from application outcome. → Claude (logical reasoning)"""
     return await claude_client.complete_json(
         system=OUTCOME_ANALYSIS_SYSTEM,
         user=f"Application outcome:\n{_format_dict(outcome_data)}",

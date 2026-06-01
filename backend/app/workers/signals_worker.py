@@ -20,7 +20,7 @@ async def scan_linkedin_signals(ctx: dict) -> dict:
     # Step 1: Scrape LinkedIn for hiring-related posts
     posts = await scrape_linkedin_posts(
         max_posts_per_query=25,
-        date_range="past-24h",
+        date_range="24h",
     )
 
     if not posts:

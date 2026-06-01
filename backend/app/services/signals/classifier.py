@@ -10,7 +10,7 @@ from typing import Any
 from app.database import get_db
 from app.logger import log
 from app.services.ai import orchestrator
-from app.services.scrapers.linkedin_posts import has_hiring_signal
+from app.services.scrapers.linkedin_posts import has_hiring_signal, is_likely_us
 
 
 # ── Classification pipeline ──────────────────────────────────────────────
@@ -28,6 +28,11 @@ async def classify_and_store(posts: list[dict]) -> dict[str, Any]:
 
             # Quick keyword pre-filter — skip posts with zero hiring keywords
             if not has_hiring_signal(post.get("content", "")):
+                stats["skipped"] += 1
+                continue
+
+            # US location filter — skip clearly foreign posts (saves Claude API $$$)
+            if not is_likely_us(post):
                 stats["skipped"] += 1
                 continue
 
