@@ -1,24 +1,13 @@
-/*  JobPilot — Extension popup logic v2
-    Multi-ATS support: Greenhouse, Lever, Ashby, Workday, SmartRecruiters, Workable  */
+/*  JobPilot — Extension popup logic v2.1
+    Works on ANY job application page — ATS platforms + company career sites.  */
 
 const statusEl = document.getElementById('status');
 const profileEl = document.getElementById('profile-info');
 const resumeEl = document.getElementById('resume-info');
 const fillBtn = document.getElementById('fill-btn');
 
-/* ATS domain patterns for "Fill This Page" button */
-const ATS_PATTERNS = [
-  'greenhouse.io',
-  'lever.co',
-  'ashbyhq.com',
-  'myworkdayjobs.com',
-  'smartrecruiters.com',
-  'workable.com',
-  '/jobs/',
-  '/careers/',
-  '/apply/',
-  'job-boards',
-];
+/* Always show "Fill This Page" — the user knows when they're on a job page.
+   The content script itself checks for forms before filling. */
 
 chrome.runtime.sendMessage({ action: 'getProfile' }, (resp) => {
   if (resp?.ok && resp.profile) {
@@ -37,17 +26,12 @@ chrome.runtime.sendMessage({ action: 'getProfile' }, (resp) => {
       resumeEl.style.display = 'block';
       resumeEl.innerHTML = `<i class="fa-solid fa-file-pdf"></i> ${resp.default_resume_name}`;
     }
+
+    /* Show fill button whenever connected (user decides when to use it) */
+    fillBtn.style.display = 'block';
   } else {
     statusEl.className = 'status err';
     statusEl.innerHTML = '<div class="dot red"></div> Cannot reach server — is JobPilot running?';
-  }
-});
-
-/* Show "Fill This Page" if we're on a recognized ATS domain */
-chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-  const url = (tabs[0]?.url || '').toLowerCase();
-  if (ATS_PATTERNS.some(p => url.includes(p))) {
-    fillBtn.style.display = 'block';
   }
 });
 

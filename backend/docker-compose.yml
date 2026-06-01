@@ -1,0 +1,49 @@
+# Local development — run API + worker + Redis together
+# Usage: docker-compose up
+#
+# Requires .env file with at least:
+#   SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
+#   OPENAI_API_KEY and/or CLAUDE_API (for AI features)
+#   APIFY_TOKEN (for LinkedIn scraping)
+#
+# Redis runs locally — no REDIS_URL needed in .env for local dev.
+
+services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    env_file: .env
+    environment:
+      - REDIS_URL=redis://redis:6379
+      - ENVIRONMENT=development
+      - LOG_LEVEL=DEBUG
+    depends_on:
+      - redis
+    # Override supervisord — run just the API for dev (auto-reload)
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    volumes:
+      - .:/app
+
+  worker:
+    build: .
+    env_file: .env
+    environment:
+      - REDIS_URL=redis://redis:6379
+      - ENVIRONMENT=development
+      - LOG_LEVEL=DEBUG
+    depends_on:
+      - redis
+    command: arq app.workers.WorkerSettings
+    volumes:
+      - .:/app
+
+volumes:
+  redis_data:

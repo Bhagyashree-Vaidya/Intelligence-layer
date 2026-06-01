@@ -28,7 +28,7 @@ async def _broadcast(msg: dict):
             await ws.send_text(json.dumps(msg))
         except Exception:
             dead.add(ws)
-    _ws_clients -= dead
+    _ws_clients.difference_update(dead)
 
 
 @router.websocket("/ws/scrape")
@@ -59,7 +59,7 @@ async def start_ats_scrape(body: dict | None = None):
         return {"error": "Scrape already running"}, 409
 
     body = body or {}
-    hours = int(body.get("hours", 168))
+    hours = int(body.get("hours", 1440))
     roles = body.get("roles", "")
     role_keys = [r.strip() for r in roles.split(",") if r.strip()] or None
 
@@ -134,11 +134,25 @@ async def start_apify_scrape(body: dict | None = None):
 
     async def run():
         try:
-            scrape_status["progress"] = f"Running Apify {platform} actor..."
+            total = 0
+
+            # General role-based search
+            scrape_status["progress"] = f"Running Apify {platform} general search..."
             await _broadcast(scrape_status)
             jobs = await apify.scrape_via_apify(platform=platform, search_terms=search_terms)
             count = await db.upsert_jobs(jobs)
-            scrape_status["last_result"] = f"Apify {platform}: {len(jobs)} jobs, {count} saved"
+            total += len(jobs)
+
+            # Company-targeted searches (for companies without ATS APIs)
+            scrape_status["progress"] = "Running Apify company-targeted searches..."
+            await _broadcast(scrape_status)
+            company_jobs = await apify.scrape_company_linkedin_jobs()
+            count2 = await db.upsert_jobs(company_jobs)
+            total += len(company_jobs)
+
+            scrape_status["last_result"] = (
+                f"Apify: {len(jobs)} general + {len(company_jobs)} company-targeted = {total} total"
+            )
             log.info(scrape_status["last_result"])
         except Exception as e:
             scrape_status["last_result"] = f"Apify error: {e}"
@@ -158,7 +172,7 @@ async def start_full_scrape(body: dict | None = None):
         return {"error": "Scrape already running"}, 409
 
     body = body or {}
-    hours = int(body.get("hours", 24))
+    hours = int(body.get("hours", 1440))
     roles = body.get("roles", "")
     role_keys = [r.strip() for r in roles.split(",") if r.strip()] or None
 
@@ -190,7 +204,7 @@ async def start_full_scrape(body: dict | None = None):
                 errors.append(f"BigTech: {e}")
                 log.error(f"Big Tech scrape error: {e}")
 
-            # 3. Apify
+            # 3. Apify — general + company-targeted
             try:
                 config = apify.load_apify_config()
                 if config.get("token"):
@@ -198,10 +212,17 @@ async def start_full_scrape(body: dict | None = None):
                     await _broadcast(scrape_status)
                     li_jobs = await apify.scrape_via_apify(
                         platform="linkedin",
-                        search_terms=role_keys or ["Product Manager", "Software Engineer"],
+                        search_terms=role_keys or ["Product Manager", "Software Engineer",
+                                                   "Program Manager", "UX Designer"],
                     )
                     await db.upsert_jobs(li_jobs)
                     total_jobs += len(li_jobs)
+
+                    scrape_status["progress"] = "Scraping company-targeted LinkedIn..."
+                    await _broadcast(scrape_status)
+                    co_jobs = await apify.scrape_company_linkedin_jobs()
+                    await db.upsert_jobs(co_jobs)
+                    total_jobs += len(co_jobs)
             except Exception as e:
                 errors.append(f"Apify: {e}")
                 log.error(f"Apify scrape error: {e}")
@@ -224,3 +245,65 @@ async def start_full_scrape(body: dict | None = None):
 
     asyncio.create_task(run())
     return {"status": "started"}
+
+
+# ── Coverage Health Check ──────────────────────────────────────────────────
+
+TARGET_COMPANIES = [
+    "google", "microsoft", "apple", "amazon", "meta", "netflix",
+    "salesforce", "slack", "zoom", "stripe", "airbnb", "uber",
+    "doordash", "lyft", "pinterest", "reddit", "discord", "figma",
+    "notion", "asana", "mongodb", "databricks", "snowflake",
+    "cloudflare", "datadog", "okta", "segment", "plaid", "brex",
+    "ramp", "robinhood", "coinbase", "block", "toast", "affirm",
+    "chime", "sofi", "mercury", "marqeta", "spacex", "anduril",
+    "palantir", "scaleai", "openai", "anthropic", "duolingo",
+    "instacart", "roblox", "coursera", "dropbox", "gusto",
+    "airtable", "rippling", "samsara", "nvidia", "dell", "intel",
+    "etsy", "spotify", "adobe", "snap", "tiktok", "servicenow",
+    "paypal", "intuit", "ibm", "oracle", "cisco", "linkedin",
+]
+
+
+@router.get("/scrape/health")
+async def coverage_health():
+    """Check which target companies have jobs and return coverage gaps."""
+    supa = db.get_db()
+
+    results = {}
+    zero_jobs = []
+    for company in TARGET_COMPANIES:
+        resp = (
+            supa.table("jobs")
+            .select("id", count="exact")
+            .ilike("company", f"%{company}%")
+            .execute()
+        )
+        count = resp.count or 0
+        results[company] = count
+        if count == 0:
+            zero_jobs.append(company)
+
+    total_resp = supa.table("jobs").select("id", count="exact").execute()
+    total_jobs = total_resp.count or 0
+
+    # Get latest health check records
+    history = (
+        supa.table("scrape_health")
+        .select("*")
+        .order("checked_at", desc=True)
+        .limit(5)
+        .execute()
+    )
+
+    return {
+        "total_jobs": total_jobs,
+        "target_companies": len(TARGET_COMPANIES),
+        "covered": len(TARGET_COMPANIES) - len(zero_jobs),
+        "coverage_pct": round(
+            (len(TARGET_COMPANIES) - len(zero_jobs)) / len(TARGET_COMPANIES) * 100, 1
+        ),
+        "zero_job_companies": zero_jobs,
+        "company_counts": results,
+        "recent_checks": history.data or [],
+    }

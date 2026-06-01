@@ -23,8 +23,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:.4; } }
         `}</style>
       </head>
-      <body className="jp-app" style={{ height: "100%" }}>
-        <div className="jp-shell" style={{ height: "100%" }}>
+      <body className="jp-app">
+        <div className="jp-shell">
           <Sidebar />
           <main className="jp-main">{children}</main>
         </div>

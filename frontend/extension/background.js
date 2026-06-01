@@ -1,7 +1,8 @@
 /*  JobPilot — background service worker.
-    Fetches profile from the local JobPilot server and caches it.  */
+    Fetches profile from the JobPilot server and caches it.
+    Also fetches answer bank from application_answers.md for form filling.  */
 
-const API = 'http://127.0.0.1:8000';
+const API = 'https://jobs.shreevaidya.com';
 
 async function fetchProfile() {
   try {
@@ -56,6 +57,26 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     })
       .then(r => r.json())
       .then(data => sendResponse({ ok: true, answers: data }))
+      .catch(e => sendResponse({ ok: false, error: e.message }));
+    return true;
+  }
+
+  if (msg.action === 'lookupAnswer') {
+    fetch(`${API}/api/answers/lookup`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ question: msg.question || '' }),
+    })
+      .then(r => r.json())
+      .then(data => sendResponse({ ok: true, answer: data.answer, matched_key: data.matched_key }))
+      .catch(e => sendResponse({ ok: false, error: e.message }));
+    return true;
+  }
+
+  if (msg.action === 'getAnswerBank') {
+    fetch(`${API}/api/answers/bank`)
+      .then(r => r.json())
+      .then(data => sendResponse({ ok: true, sections: data.sections }))
       .catch(e => sendResponse({ ok: false, error: e.message }));
     return true;
   }

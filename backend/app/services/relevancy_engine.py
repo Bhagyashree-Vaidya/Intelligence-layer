@@ -407,25 +407,42 @@ def compute_freshness(posted_at: str) -> dict:
         return {"hours_ago": 999, "label": "Unknown", "badge_color": "gray"}
 
     from datetime import datetime, timezone
+
+    dt = None
+
+    # Try ISO 8601 first (most common)
     try:
         dt = datetime.fromisoformat(posted_at.replace("Z", "+00:00"))
-        if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=timezone.utc)
-        now = datetime.now(timezone.utc)
-        hours = (now - dt).total_seconds() / 3600
-
-        if hours < 0:
-            hours = 0
-
-        if hours < 24:
-            return {"hours_ago": int(hours), "label": f"{int(hours)}h ago", "badge_color": "red"}
-        elif hours < 48:
-            return {"hours_ago": int(hours), "label": "1d ago", "badge_color": "orange"}
-        elif hours < 168:
-            days = int(hours / 24)
-            return {"hours_ago": int(hours), "label": f"{days}d ago", "badge_color": "yellow"}
-        else:
-            days = int(hours / 24)
-            return {"hours_ago": int(hours), "label": f"{days}d ago", "badge_color": "gray"}
     except (ValueError, TypeError):
-        return {"hours_ago": 999, "label": posted_at[:10] if len(posted_at) >= 10 else "Unknown", "badge_color": "gray"}
+        pass
+
+    # Fallback: fuzzy parse ("May 21, 2026", "21/05/2026", etc.)
+    if dt is None:
+        try:
+            from dateutil import parser as dateparser
+            dt = dateparser.parse(posted_at, fuzzy=True)
+        except Exception:
+            pass
+
+    if dt is None:
+        return {"hours_ago": 999, "label": "Unknown", "badge_color": "gray"}
+
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+
+    now = datetime.now(timezone.utc)
+    hours = (now - dt).total_seconds() / 3600
+
+    if hours < 0:
+        hours = 0
+
+    if hours < 24:
+        return {"hours_ago": int(hours), "label": f"{int(hours)}h ago", "badge_color": "red"}
+    elif hours < 48:
+        return {"hours_ago": int(hours), "label": "1d ago", "badge_color": "orange"}
+    elif hours < 168:
+        days = int(hours / 24)
+        return {"hours_ago": int(hours), "label": f"{days}d ago", "badge_color": "yellow"}
+    else:
+        days = int(hours / 24)
+        return {"hours_ago": int(hours), "label": f"{days}d ago", "badge_color": "gray"}

@@ -5,7 +5,9 @@ Supabase dashboard or the migration script in backend/scripts/migrate.py.
 """
 
 import json
+import re
 from datetime import datetime, timezone
+from dateutil import parser as dateparser
 
 from supabase import create_client, Client
 
@@ -100,6 +102,48 @@ async def delete_resume(resume_id: int) -> str | None:
 
 # ── Jobs ─────────────────────────────────────────────────────────────────────
 
+
+def _normalize_date(raw: str) -> str:
+    """Parse any date string into ISO 8601 UTC format.
+
+    Handles: ISO 8601, "May 21, 2026", "21 May 2026", epoch millis, etc.
+    Returns empty string if unparseable.
+    """
+    if not raw or not raw.strip():
+        return ""
+    raw = raw.strip()
+
+    # Already valid ISO → return as-is
+    try:
+        dt = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.isoformat()
+    except (ValueError, TypeError):
+        pass
+
+    # Epoch milliseconds (e.g. "1716307200000")
+    if raw.isdigit() and len(raw) >= 10:
+        try:
+            ts = int(raw)
+            if ts > 1e12:  # milliseconds
+                ts = ts / 1000
+            return datetime.fromtimestamp(ts, tz=timezone.utc).isoformat()
+        except (ValueError, OSError):
+            pass
+
+    # Fuzzy parse ("May 21, 2026", "21/05/2026", etc.)
+    try:
+        dt = dateparser.parse(raw, fuzzy=True)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.isoformat()
+    except (ValueError, TypeError, OverflowError):
+        pass
+
+    return ""
+
+
 async def upsert_jobs(jobs: list[dict]) -> int:
     db = get_db()
     now = datetime.now(timezone.utc).isoformat()
@@ -114,8 +158,8 @@ async def upsert_jobs(jobs: list[dict]) -> int:
             "department": str(j.get("department", "")),
             "url": str(j.get("url", "")),
             "description": str(j.get("description", ""))[:10000],
-            "updated_at": str(j.get("updated_at", "")),
-            "first_published": str(j.get("first_published", "")),
+            "updated_at": _normalize_date(str(j.get("updated_at", ""))),
+            "first_published": _normalize_date(str(j.get("first_published", ""))),
             "employment_type": str(j.get("employment_type", "")),
             "salary_range": str(j.get("salary_range", "")),
             "scraped_at": now,
@@ -128,6 +172,51 @@ async def upsert_jobs(jobs: list[dict]) -> int:
 
     log.info(f"Upserted {count} jobs")
     return count
+
+
+async def normalize_job_dates() -> int:
+    """One-time fix: convert all non-ISO dates in jobs table to ISO 8601."""
+    db = get_db()
+    fixed = 0
+    page = 0
+    page_size = 1000
+
+    while True:
+        resp = (
+            db.table("jobs")
+            .select("id, updated_at, first_published")
+            .range(page * page_size, (page + 1) * page_size - 1)
+            .execute()
+        )
+        rows = resp.data or []
+        if not rows:
+            break
+
+        for row in rows:
+            updates = {}
+            ua = row.get("updated_at", "") or ""
+            fp = row.get("first_published", "") or ""
+
+            if ua and not re.match(r"^\d{4}-", ua):
+                normalized = _normalize_date(ua)
+                if normalized and normalized != ua:
+                    updates["updated_at"] = normalized
+
+            if fp and not re.match(r"^\d{4}-", fp):
+                normalized = _normalize_date(fp)
+                if normalized and normalized != fp:
+                    updates["first_published"] = normalized
+
+            if updates:
+                db.table("jobs").update(updates).eq("id", row["id"]).execute()
+                fixed += 1
+
+        page += 1
+        if len(rows) < page_size:
+            break
+
+    log.info(f"Normalized dates for {fixed} jobs")
+    return fixed
 
 
 async def search_jobs(
@@ -214,6 +303,13 @@ async def get_applied_job_ids() -> set[int]:
     return {r["job_id"] for r in resp.data or []}
 
 
+async def get_application_by_job_id(job_id: int) -> dict | None:
+    """Get an existing application by job ID (for duplicate detection)."""
+    db = get_db()
+    resp = db.table("applications").select("*").eq("job_id", job_id).limit(1).execute()
+    return resp.data[0] if resp.data else None
+
+
 async def get_stats() -> dict:
     db = get_db()
     jobs_resp = db.table("jobs").select("id", count="exact").execute()
@@ -258,6 +354,94 @@ async def get_application_stats() -> dict:
             "rejected": status_counts.get("rejected", 0),
         },
     }
+
+
+# ── Auto-Apply ──────────────────────────────────────────────────────────────
+
+async def get_auto_apply_candidates(
+    min_score: int = 50,
+    exclude_ids: set[int] | None = None,
+    limit: int = 100,
+) -> list[dict]:
+    """Get jobs eligible for auto-apply: high score, not yet applied, recent."""
+    db = get_db()
+    q = (
+        db.table("jobs")
+        .select("*")
+        .gte("relevancy_score", min_score)
+        .order("relevancy_score", desc=True)
+        .limit(limit)
+    )
+    resp = q.execute()
+    rows = resp.data or []
+
+    # Filter out already-applied
+    if exclude_ids:
+        rows = [r for r in rows if r["id"] not in exclude_ids]
+
+    return rows
+
+
+async def log_auto_apply(
+    job_id: int,
+    status: str,
+    ats: str = "",
+    response: str = "",
+) -> int:
+    """Log an auto-apply attempt to the auto_apply_log table."""
+    db = get_db()
+    resp = db.table("auto_apply_log").insert({
+        "job_id": job_id,
+        "status": status,
+        "ats_platform": ats,
+        "response_data": response,
+        "attempted_at": datetime.now(timezone.utc).isoformat(),
+    }).execute()
+    return resp.data[0]["id"] if resp.data else 0
+
+
+async def get_auto_apply_log(limit: int = 50) -> list[dict]:
+    """Get recent auto-apply log entries with job details."""
+    db = get_db()
+    resp = (
+        db.table("auto_apply_log")
+        .select("*, jobs(title, company, url)")
+        .order("attempted_at", desc=True)
+        .limit(limit)
+        .execute()
+    )
+    rows = []
+    for r in resp.data or []:
+        job = r.pop("jobs", {}) or {}
+        rows.append({**r, **job})
+    return rows
+
+
+async def get_auto_apply_settings() -> dict:
+    """Get auto-apply settings from the auto_apply_settings table."""
+    db = get_db()
+    resp = db.table("auto_apply_settings").select("*").eq("id", 1).execute()
+    if resp.data:
+        return resp.data[0]
+    return {
+        "enabled": False,
+        "min_score": 0,
+        "max_per_run": 50,
+        "exclude_companies": "",
+        "enabled_roles": "pm,tpm,product",
+    }
+
+
+async def update_auto_apply_settings(data: dict) -> dict:
+    """Update auto-apply settings."""
+    db = get_db()
+    update = {}
+    for key in ("enabled", "min_score", "max_per_run", "exclude_companies", "enabled_roles"):
+        if key in data:
+            update[key] = data[key]
+    update["updated_at"] = datetime.now(timezone.utc).isoformat()
+    db.table("auto_apply_settings").upsert({"id": 1, **update}).execute()
+    return await get_auto_apply_settings()
 
 
 async def rescore_all_jobs(profile: dict) -> int:

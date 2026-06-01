@@ -99,6 +99,15 @@ def compile_role_patterns(role_keys: list[str] | None = None) -> list[re.Pattern
 
 
 def matches_title(title: str, compiled: list[re.Pattern]) -> bool:
+    """Check if title matches any role pattern AND is not excluded.
+
+    Uses the shared role_classifier exclusion list to reject titles like
+    'Construction Project Manager', 'Financial Analyst', 'Legal Counsel'
+    that superficially match a role keyword but are irrelevant.
+    """
+    from app.services.role_classifier import _is_excluded
+    if _is_excluded(title):
+        return False
     return any(p.search(title) for p in compiled)
 
 
@@ -242,7 +251,7 @@ async def scrape_greenhouse(
         for job in data.get("jobs", []):
             title = job.get("title", "")
             ts = job.get("updated_at", "")
-            if role_keys is not None and not matches_title(title, compiled):
+            if not matches_title(title, compiled):
                 continue
             if not is_recent(ts, cutoff):
                 continue
@@ -299,7 +308,7 @@ async def scrape_lever(
                 ts = datetime.fromtimestamp(created / 1000, tz=timezone.utc).isoformat()
             else:
                 ts = ""
-            if role_keys is not None and not matches_title(title, compiled):
+            if not matches_title(title, compiled):
                 continue
             if not is_recent(ts, cutoff):
                 continue
@@ -346,7 +355,7 @@ async def scrape_ashby(
         for job in data.get("jobs", []):
             title = job.get("title", "")
             ts = job.get("updatedAt", job.get("publishedAt", ""))
-            if role_keys is not None and not matches_title(title, compiled):
+            if not matches_title(title, compiled):
                 continue
             if not is_recent(ts, cutoff):
                 continue
@@ -404,7 +413,7 @@ async def scrape_smartrecruiters(
             for job in postings:
                 title = job.get("name", "")
                 ts = job.get("releasedDate", "")
-                if role_keys is not None and not matches_title(title, compiled):
+                if not matches_title(title, compiled):
                     continue
                 if not is_recent(ts, cutoff):
                     continue
@@ -492,7 +501,7 @@ async def scrape_workday(
 
             for job in postings:
                 title = job.get("title", "")
-                if role_keys is not None and not matches_title(title, compiled):
+                if not matches_title(title, compiled):
                     continue
                 # Workday doesn't give ISO dates in list — include if title matches
                 all_jobs.append(flatten_workday(job, company, host))
@@ -544,7 +553,7 @@ async def scrape_workable(
         for job in data.get("jobs", []):
             title = job.get("title", "")
             ts = job.get("published_on", "")
-            if role_keys is not None and not matches_title(title, compiled):
+            if not matches_title(title, compiled):
                 continue
             if not is_recent(ts, cutoff):
                 continue
@@ -554,13 +563,262 @@ async def scrape_workable(
         return []
 
 
+# ── YC Work at a Startup Scraper ────────────────────────────────────────────
+
+async def scrape_yc_jobs(
+    client: httpx.AsyncClient,
+    compiled: list[re.Pattern],
+    cutoff: datetime,
+    role_keys: list[str] | None,
+    max_results: int = 200,
+) -> list[dict]:
+    """Scrape Y Combinator Work at a Startup via their Algolia-backed API.
+
+    The public search API is at workatastartup.com/companies.json
+    and uses Algolia under the hood. We use the public JSON endpoint.
+    """
+    all_jobs = []
+    page = 0
+
+    while len(all_jobs) < max_results:
+        try:
+            # YC WAAS has a public JSON API
+            resp = await client.get(
+                "https://www.workatastartup.com/companies/jobs",
+                params={
+                    "page": page,
+                    "query": "",
+                    "hasEquity": "false",
+                    "hasSalary": "false",
+                    "industry": "B2B,Consumer,Education,Enterprise,Fintech,Healthcare,Real+Estate",
+                    "interviewProcess": "",
+                    "jobType": "fulltime",
+                    "layout": "list-compact",
+                    "sortBy": "created_desc",
+                    "tab": "any",
+                    "usVisaOnly": "false",
+                },
+                headers={"Accept": "application/json"},
+                timeout=20,
+            )
+            if resp.status_code != 200:
+                break
+            data = resp.json()
+
+            jobs_list = data if isinstance(data, list) else data.get("jobs", data.get("results", []))
+            if not jobs_list:
+                break
+
+            for job in jobs_list:
+                title = job.get("title", "")
+                if not matches_title(title, compiled):
+                    continue
+
+                company_name = job.get("company_name", job.get("startup_name", ""))
+                ts = job.get("created_at", job.get("updated_at", ""))
+
+                all_jobs.append({
+                    "greenhouse_id": f"yc-{job.get('id', '')}",
+                    "company": company_name.lower().replace(" ", "") if company_name else "yc-startup",
+                    "title": title,
+                    "location": job.get("pretty_eng_type", job.get("location", "Remote")),
+                    "department": "",
+                    "url": job.get("url", f"https://www.workatastartup.com/jobs/{job.get('id', '')}"),
+                    "description": strip_html(job.get("description", "")),
+                    "updated_at": ts,
+                    "first_published": ts,
+                    "employment_type": job.get("type", "Full-time"),
+                    "salary_range": "",
+                })
+
+            page += 1
+            if len(jobs_list) < 20:
+                break
+        except Exception:
+            break
+
+    return all_jobs[:max_results]
+
+
+# ── Wellfound (AngelList) Scraper ───────────────────────────────────────────
+
+async def scrape_wellfound(
+    client: httpx.AsyncClient,
+    compiled: list[re.Pattern],
+    cutoff: datetime,
+    role_keys: list[str] | None,
+    max_results: int = 200,
+) -> list[dict]:
+    """Scrape Wellfound (formerly AngelList Talent) via their GraphQL API.
+
+    Uses the public /graphql endpoint that powers wellfound.com search.
+    """
+    all_jobs = []
+    page = 1
+
+    # Build search query from role filters
+    search_roles = ["Product Manager", "Software Engineer", "UX Designer"]
+    if role_keys:
+        role_map = {
+            "pm": "Product Manager",
+            "swe": "Software Engineer",
+            "ux": "UX Designer",
+            "tpm": "Program Manager",
+            "product": "Product",
+            "presales": "Solutions Engineer",
+        }
+        search_roles = [role_map.get(k, k) for k in role_keys if k in role_map]
+
+    for search_term in search_roles:
+        page = 1
+        while len(all_jobs) < max_results:
+            try:
+                # Wellfound has a public GraphQL API
+                query = {
+                    "query": """
+                    query JobSearchQuery($query: String!, $page: Int!) {
+                        talent {
+                            jobListings(filters: {
+                                query: $query,
+                                locationSlugs: ["united-states"],
+                                remote: true,
+                                page: $page
+                            }) {
+                                edges {
+                                    node {
+                                        id
+                                        title
+                                        slug
+                                        description
+                                        primaryRoleTitle
+                                        liveStartAt
+                                        locationNames
+                                        compensation
+                                        remote
+                                        startup {
+                                            name
+                                            slug
+                                            companySize
+                                        }
+                                    }
+                                }
+                                pageInfo {
+                                    hasNextPage
+                                }
+                            }
+                        }
+                    }
+                    """,
+                    "variables": {"query": search_term, "page": page},
+                }
+
+                resp = await client.post(
+                    "https://wellfound.com/graphql",
+                    json=query,
+                    headers={
+                        "Content-Type": "application/json",
+                        "Accept": "application/json",
+                        "Origin": "https://wellfound.com",
+                        "Referer": "https://wellfound.com/jobs",
+                    },
+                    timeout=20,
+                )
+
+                if resp.status_code != 200:
+                    # Fallback: try the public noscript/REST search
+                    resp2 = await client.get(
+                        f"https://wellfound.com/role/{search_term.lower().replace(' ', '-')}",
+                        params={"page": page},
+                        headers={"Accept": "application/json"},
+                        timeout=20,
+                    )
+                    if resp2.status_code != 200:
+                        break
+                    data = resp2.json() if resp2.headers.get("content-type", "").startswith("application/json") else {}
+                    jobs_list = data.get("jobs", data.get("results", []))
+                    if not jobs_list:
+                        break
+
+                    for job in jobs_list:
+                        title = job.get("title", "")
+                        if not matches_title(title, compiled):
+                            continue
+                        company_name = job.get("company_name", job.get("startup_name", ""))
+                        ts = job.get("live_start_at", job.get("created_at", ""))
+                        all_jobs.append({
+                            "greenhouse_id": f"wf-{job.get('id', '')}",
+                            "company": company_name.lower().replace(" ", "") if company_name else "wellfound-startup",
+                            "title": title,
+                            "location": ", ".join(job.get("location_names", [])) if isinstance(job.get("location_names"), list) else job.get("location", "Remote"),
+                            "department": "",
+                            "url": f"https://wellfound.com/jobs/{job.get('slug', job.get('id', ''))}",
+                            "description": strip_html(job.get("description", "")),
+                            "updated_at": ts,
+                            "first_published": ts,
+                            "employment_type": "Full-time",
+                            "salary_range": job.get("compensation", ""),
+                        })
+                    page += 1
+                    continue
+
+                data = resp.json()
+                edges = (
+                    data.get("data", {})
+                    .get("talent", {})
+                    .get("jobListings", {})
+                    .get("edges", [])
+                )
+                has_next = (
+                    data.get("data", {})
+                    .get("talent", {})
+                    .get("jobListings", {})
+                    .get("pageInfo", {})
+                    .get("hasNextPage", False)
+                )
+
+                if not edges:
+                    break
+
+                for edge in edges:
+                    node = edge.get("node", {})
+                    title = node.get("title", "")
+                    if not matches_title(title, compiled):
+                        continue
+                    startup = node.get("startup", {}) or {}
+                    company_name = startup.get("name", "")
+                    ts = node.get("liveStartAt", "")
+                    loc_names = node.get("locationNames", [])
+
+                    all_jobs.append({
+                        "greenhouse_id": f"wf-{node.get('id', '')}",
+                        "company": company_name.lower().replace(" ", "") if company_name else "wellfound-startup",
+                        "title": title,
+                        "location": ", ".join(loc_names) if isinstance(loc_names, list) else str(loc_names or "Remote"),
+                        "department": node.get("primaryRoleTitle", ""),
+                        "url": f"https://wellfound.com/jobs/{node.get('slug', node.get('id', ''))}",
+                        "description": strip_html(node.get("description", "")),
+                        "updated_at": ts,
+                        "first_published": ts,
+                        "employment_type": "Full-time",
+                        "salary_range": node.get("compensation", ""),
+                    })
+
+                page += 1
+                if not has_next:
+                    break
+            except Exception:
+                break
+
+    return all_jobs[:max_results]
+
+
 # ── Unified Scraper Entry Point ──────────────────────────────────────────────
 
 async def scrape_jobs(
     companies: list[str] | None = None,
     role_keys: list[str] | None = None,
     hours: int = 168,
-    concurrency: int = 20,
+    concurrency: int = 5,
     progress_callback: Callable[[int, int], None] | None = None,
 ) -> list[dict]:
     """Scrape all configured ATS platforms. Returns flat list of job dicts.
@@ -697,6 +955,20 @@ async def scrape_jobs(
             coros.append(run_with_sem(
                 scrape_workable(client, company, slug, compiled, cutoff, role_keys)
             ))
+
+        # YC Work at a Startup
+        task_labels.append("yc/workatastartup")
+        coros.append(run_with_sem(
+            scrape_yc_jobs(client, compiled, cutoff, role_keys, max_results=200)
+        ))
+
+        # Wellfound (AngelList)
+        task_labels.append("wellfound/all")
+        coros.append(run_with_sem(
+            scrape_wellfound(client, compiled, cutoff, role_keys, max_results=200)
+        ))
+
+        total_tasks = len(task_labels)
 
         # Run all concurrently
         results = await asyncio.gather(*coros, return_exceptions=True)

@@ -123,9 +123,14 @@ COMPILED_ROLES = [re.compile(p, re.IGNORECASE) for p in ROLE_PATTERNS]
 
 
 def matches_role(title: str, role_keys: list[str] | None = None) -> bool:
-    """Check if title matches any role filter. If role_keys is None, match all."""
-    if role_keys is None:
-        return True  # No filter = include all
+    """Check if title matches any role filter. Always filters — never stores junk.
+
+    Uses the shared exclusion list to reject irrelevant titles like
+    'Financial Analyst', 'Legal Counsel', 'Construction Project Manager'.
+    """
+    from app.services.role_classifier import _is_excluded
+    if _is_excluded(title):
+        return False
     return any(p.search(title) for p in COMPILED_ROLES)
 
 
@@ -335,77 +340,115 @@ async def scrape_apple(
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# Google — careers.google.com API
+# Google — SSR HTML parsing from careers.google.com
 # ═══════════════════════════════════════════════════════════════════════════════
 
 async def scrape_google(
     client: httpx.AsyncClient,
     search_terms: list[str] | None = None,
-    location: str = "",
+    location: str = "United States",
     max_results: int = 100,
 ) -> list[dict]:
-    """Scrape Google jobs via their careers API.
+    """Scrape Google jobs from their careers page SSR HTML.
 
-    Google's career site makes requests to:
-      https://careers.google.com/api/v3/search/
-    with query parameters.
+    Google embeds job card data in the initial HTML response:
+      - Each card is a <li class="lLd3Je"> with ssk="N:JOB_ID"
+      - Title in <h3> inside the card
+      - Link as href="jobs/results/{ID}-{slug}"
+      - Location as "City, ST, USA" text nearby
+
+    Pagination: page=2, page=3, etc. ~20 results per page.
     """
     if not search_terms:
-        search_terms = ["Product Manager", "Program Manager", "UX"]
+        search_terms = ["Product Manager", "Program Manager", "UX Designer"]
 
-    all_jobs = []
+    all_jobs: list[dict] = []
+    seen_ids: set[str] = set()
 
     for query in search_terms:
-        page_token = ""
+        page = 1
         while len(all_jobs) < max_results:
             try:
-                params = {
-                    "q": query,
-                    "page_size": 20,
-                    "jlo": "en_US",
-                }
-                if location:
-                    params["location"] = location
-                if page_token:
-                    params["page_token"] = page_token
-
                 resp = await client.get(
-                    "https://careers.google.com/api/v3/search/",
-                    params=params,
-                    timeout=15,
+                    "https://www.google.com/about/careers/applications/jobs/results",
+                    params={"q": query, "location": location, "page": page},
+                    headers={**HEADERS, "Accept": "text/html"},
+                    timeout=20,
                 )
-
                 if resp.status_code != 200:
                     break
 
-                data = resp.json()
-                jobs = data.get("jobs", [])
-                if not jobs:
+                html = resp.text
+
+                # Split into job cards by <li class="lLd3Je">
+                card_starts = [
+                    m.start() for m in re.finditer(r'<li\s+class="lLd3Je"', html)
+                ]
+                if not card_starts:
                     break
 
-                for job in jobs:
-                    locations = job.get("locations", [])
-                    loc_str = " | ".join(
-                        loc.get("display", loc.get("name", "")) for loc in locations
-                    ) if isinstance(locations, list) else str(locations)
+                for i, start in enumerate(card_starts):
+                    end = (
+                        card_starts[i + 1]
+                        if i + 1 < len(card_starts)
+                        else html.find("</ul>", start)
+                    )
+                    card = html[start:end]
 
-                    job_id = job.get("id", "")
+                    # Job ID from ssk attribute: ssk='17:80389585732805318'
+                    ssk_m = re.search(r"ssk=['\"]?\d+:(\d+)", card)
+                    job_id = ssk_m.group(1) if ssk_m else ""
+                    if not job_id or job_id in seen_ids:
+                        continue
+                    seen_ids.add(job_id)
+
+                    # Title from <h3>
+                    h3_m = re.search(r"<h3[^>]*>(.*?)</h3>", card, re.DOTALL)
+                    title = (
+                        re.sub(r"<[^>]+>", "", h3_m.group(1)).strip()
+                        if h3_m
+                        else ""
+                    )
+                    if not title:
+                        continue
+
+                    # Link: href="jobs/results/{ID}-{slug}"
+                    link_m = re.search(r'href="(jobs/results/[^"]+)"', card)
+                    link_path = link_m.group(1) if link_m else ""
+
+                    # Location: "City, ST, USA" pattern
+                    loc_m = re.findall(
+                        r">([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*"
+                        r",\s*[A-Z]{2},?\s*USA?)<",
+                        card,
+                    )
+                    location_str = loc_m[0] if loc_m else ""
+
+                    url = (
+                        f"https://www.google.com/about/careers/applications/{link_path}"
+                        if link_path
+                        else f"https://www.google.com/about/careers/applications/jobs/results/{job_id}"
+                    )
+
                     all_jobs.append({
-                        "greenhouse_id": str(job_id),
+                        "greenhouse_id": f"google-{job_id}",
                         "company": "google",
-                        "title": job.get("title", ""),
-                        "location": loc_str,
-                        "department": job.get("categories", [""])[0] if job.get("categories") else "",
-                        "url": f"https://www.google.com/about/careers/applications/jobs/results/{job_id}",
-                        "description": strip_html(job.get("description", "")),
-                        "updated_at": job.get("publish_date", ""),
-                        "first_published": job.get("publish_date", ""),
+                        "title": title,
+                        "location": location_str,
+                        "department": "",
+                        "url": url,
+                        "description": "",
+                        "updated_at": "",
+                        "first_published": "",
                         "employment_type": "",
-                        "salary_range": job.get("salary", ""),
+                        "salary_range": "",
                     })
 
-                page_token = data.get("next_page_token", "")
-                if not page_token:
+                # Fewer than ~15 cards → last page
+                if len(card_starts) < 15:
+                    break
+                page += 1
+                if page > 6:
                     break
             except Exception:
                 break
@@ -414,7 +457,7 @@ async def scrape_google(
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# Meta — metacareers.com API
+# Meta — metacareers.com (requires browser session, limited httpx support)
 # ═══════════════════════════════════════════════════════════════════════════════
 
 async def scrape_meta(
@@ -422,102 +465,116 @@ async def scrape_meta(
     search_terms: list[str] | None = None,
     max_results: int = 100,
 ) -> list[dict]:
-    """Scrape Meta jobs via their careers API.
+    """Scrape Meta jobs from metacareers.com.
 
-    Meta's career site uses a REST endpoint:
-      https://www.metacareers.com/graphql
-    But also has a simpler endpoint at:
-      https://www.metacareers.com/jobs
-    We'll use their search endpoint that returns JSON.
+    Meta's careers page blocks non-browser HTTP clients (returns 400).
+    This scraper attempts two strategies:
+      1. JSON-LD structured data (if the page renders)
+      2. HTML link parsing fallback
+    If both fail (likely without browser cookies), returns empty list.
+    Future: integrate Apify headless browser for reliable scraping.
     """
     if not search_terms:
-        search_terms = ["Product Manager", "Program Manager", "UX"]
+        search_terms = ["Product Manager", "Program Manager", "UX Designer"]
 
-    all_jobs = []
+    all_jobs: list[dict] = []
+    seen_ids: set[str] = set()
 
     for query in search_terms:
         try:
-            # Meta's search API
-            params = {
-                "q": query,
-                "page": 1,
-                "results_per_page": 50,
-                "sort_by_new": True,
-            }
-
             resp = await client.get(
-                "https://www.metacareers.com/search",
-                params=params,
-                headers={
-                    **HEADERS,
-                    "Accept": "text/html,application/xhtml+xml",
-                },
-                timeout=15,
+                "https://www.metacareers.com/jobs",
+                params={"q": query},
+                headers={**HEADERS, "Accept": "text/html,application/xhtml+xml"},
+                timeout=20,
+                follow_redirects=True,
             )
-
             if resp.status_code != 200:
+                print(f"[Meta] HTTP {resp.status_code} for query '{query}' — site blocks non-browser clients")
                 continue
 
-            # Try to extract JSON from the page (Meta embeds it in script tags)
-            text = resp.text
-            # Look for structured data in the page
-            json_match = re.search(
-                r'<script[^>]*type="application/ld\+json"[^>]*>(.*?)</script>',
-                text, re.DOTALL
-            )
-            if json_match:
-                try:
-                    ld_data = json.loads(json_match.group(1))
-                    if isinstance(ld_data, dict) and "itemListElement" in ld_data:
-                        for item in ld_data["itemListElement"]:
-                            job = item.get("item", item)
-                            all_jobs.append({
-                                "greenhouse_id": str(job.get("identifier", {}).get("value", "")),
-                                "company": "meta",
-                                "title": job.get("title", ""),
-                                "location": job.get("jobLocation", {}).get("address", {}).get("addressLocality", "")
-                                    if isinstance(job.get("jobLocation"), dict) else "",
-                                "department": "",
-                                "url": job.get("url", ""),
-                                "description": strip_html(job.get("description", "")),
-                                "updated_at": job.get("datePosted", ""),
-                                "first_published": job.get("datePosted", ""),
-                                "employment_type": job.get("employmentType", ""),
-                                "salary_range": "",
-                            })
-                except json.JSONDecodeError:
-                    pass
+            html = resp.text
 
-            # Also try to find embedded JSON state
-            state_match = re.search(r'"jobData":\s*(\[.*?\])', text)
-            if state_match:
+            # Strategy 1: JSON-LD structured data
+            ld_blocks = re.findall(
+                r'<script[^>]*type="application/ld\+json"[^>]*>(.*?)</script>',
+                html, re.DOTALL,
+            )
+            for ld_text in ld_blocks:
                 try:
-                    job_data = json.loads(state_match.group(1))
-                    for job in job_data:
+                    ld = json.loads(ld_text)
+                    items = ld.get("itemListElement", []) if isinstance(ld, dict) else (ld if isinstance(ld, list) else [])
+                    for item in items:
+                        job = item.get("item", item) if isinstance(item, dict) else {}
+                        jid = str(job.get("identifier", {}).get("value", ""))
+                        if not jid or jid in seen_ids:
+                            continue
+                        seen_ids.add(jid)
+                        jl = job.get("jobLocation", {})
+                        loc = ""
+                        if isinstance(jl, dict):
+                            addr = jl.get("address", {})
+                            if isinstance(addr, dict):
+                                parts = [addr.get("addressLocality", ""), addr.get("addressRegion", "")]
+                                loc = ", ".join(p for p in parts if p)
                         all_jobs.append({
-                            "greenhouse_id": str(job.get("id", "")),
+                            "greenhouse_id": f"meta-{jid}",
                             "company": "meta",
                             "title": job.get("title", ""),
-                            "location": job.get("locations", [""])[0] if job.get("locations") else "",
-                            "department": job.get("sub_teams", [""])[0] if job.get("sub_teams") else "",
-                            "url": f"https://www.metacareers.com/jobs/{job.get('id', '')}",
-                            "description": "",
-                            "updated_at": "",
-                            "first_published": "",
-                            "employment_type": "",
+                            "location": loc,
+                            "department": "",
+                            "url": job.get("url", f"https://www.metacareers.com/jobs/{jid}"),
+                            "description": strip_html(job.get("description", ""))[:500],
+                            "updated_at": job.get("datePosted", ""),
+                            "first_published": job.get("datePosted", ""),
+                            "employment_type": job.get("employmentType", ""),
                             "salary_range": "",
                         })
-                except json.JSONDecodeError:
+                except (json.JSONDecodeError, TypeError):
                     pass
+
+            # Strategy 2: job links from HTML
+            job_links = re.findall(
+                r'href="((?:https://www\.metacareers\.com)?/jobs/(\d+)/[^"]*)"',
+                html,
+            )
+            for href, jid in job_links:
+                if jid in seen_ids:
+                    continue
+                seen_ids.add(jid)
+                pos = html.find(href)
+                if pos < 0:
+                    continue
+                block = html[pos:pos + 500]
+                title_m = re.search(r'>([^<]{5,100}(?:Manager|Engineer|Designer|Researcher|Analyst))<', block)
+                if not title_m:
+                    continue
+                url = href if href.startswith("http") else f"https://www.metacareers.com{href}"
+                all_jobs.append({
+                    "greenhouse_id": f"meta-{jid}",
+                    "company": "meta",
+                    "title": title_m.group(1).strip(),
+                    "location": "",
+                    "department": "",
+                    "url": url,
+                    "description": "",
+                    "updated_at": "",
+                    "first_published": "",
+                    "employment_type": "",
+                    "salary_range": "",
+                })
 
         except Exception:
             continue
+
+    if not all_jobs:
+        print("[Meta] No jobs scraped — metacareers.com requires browser session")
 
     return all_jobs[:max_results]
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# Microsoft — careers.microsoft.com API
+# Microsoft — apply.careers.microsoft.com PCSX JSON API
 # ═══════════════════════════════════════════════════════════════════════════════
 
 async def scrape_microsoft(
@@ -525,61 +582,77 @@ async def scrape_microsoft(
     search_terms: list[str] | None = None,
     max_results: int = 100,
 ) -> list[dict]:
-    """Scrape Microsoft jobs via their careers search API.
+    """Scrape Microsoft jobs via their PCSX search API.
 
-    Endpoint: https://gcsservices.careers.microsoft.com/search/api/v1/search
+    Microsoft migrated to apply.careers.microsoft.com with a JSON API at
+    /api/pcsx/search. Returns 10 positions per page, paginated via start=N.
+    No auth required.
     """
     if not search_terms:
         search_terms = ["Product Manager", "Program Manager", "UX Designer"]
 
-    all_jobs = []
+    all_jobs: list[dict] = []
+    seen_ids: set[str] = set()
 
     for query in search_terms:
-        skip = 0
+        start = 0
         while len(all_jobs) < max_results:
             try:
-                params = {
-                    "q": query,
-                    "lc": "United States",
-                    "l": "en_us",
-                    "pg": skip // 20 + 1,
-                    "pgSz": 20,
-                    "o": "Recent",
-                }
-
                 resp = await client.get(
-                    "https://gcsservices.careers.microsoft.com/search/api/v1/search",
-                    params=params,
-                    timeout=15,
+                    "https://apply.careers.microsoft.com/api/pcsx/search",
+                    params={
+                        "domain": "microsoft.com",
+                        "query": query,
+                        "location": "United States",
+                        "start": start,
+                    },
+                    headers={**HEADERS, "Accept": "application/json"},
+                    timeout=20,
                 )
-
                 if resp.status_code != 200:
                     break
 
                 data = resp.json()
-                results = data.get("operationResult", {}).get("result", {}).get("jobs", [])
-                if not results:
+                result = data.get("data", {})
+                positions = result.get("positions", [])
+                total = result.get("count", 0)
+
+                if not positions:
                     break
 
-                for job in results:
-                    properties = job.get("properties", {}) if isinstance(job.get("properties"), dict) else {}
+                for pos in positions:
+                    jid = str(pos.get("id", ""))
+                    if not jid or jid in seen_ids:
+                        continue
+                    seen_ids.add(jid)
+
+                    # Location: use standardizedLocations if available
+                    std_locs = pos.get("standardizedLocations", [])
+                    raw_locs = pos.get("locations", [])
+                    location = (
+                        " | ".join(std_locs[:3])
+                        if std_locs
+                        else " | ".join(raw_locs[:3])
+                        if raw_locs
+                        else ""
+                    )
+
                     all_jobs.append({
-                        "greenhouse_id": str(job.get("jobId", "")),
+                        "greenhouse_id": f"ms-{jid}",
                         "company": "microsoft",
-                        "title": job.get("title", ""),
-                        "location": job.get("primaryLocation", properties.get("primaryLocation", "")),
-                        "department": properties.get("discipline", properties.get("category", "")),
-                        "url": f"https://jobs.careers.microsoft.com/global/en/job/{job.get('jobId', '')}",
-                        "description": strip_html(properties.get("description", "")),
-                        "updated_at": properties.get("dateCreated", ""),
-                        "first_published": properties.get("dateCreated", ""),
-                        "employment_type": properties.get("employmentType", ""),
+                        "title": pos.get("name", ""),
+                        "location": location,
+                        "department": pos.get("department", ""),
+                        "url": f"https://apply.careers.microsoft.com{pos.get('positionUrl', f'/careers/job/{jid}')}",
+                        "description": "",
+                        "updated_at": "",
+                        "first_published": "",
+                        "employment_type": pos.get("workLocationOption", ""),
                         "salary_range": "",
                     })
 
-                skip += 20
-                total = data.get("operationResult", {}).get("result", {}).get("totalJobs", 0)
-                if skip >= total:
+                start += len(positions)
+                if start >= total:
                     break
             except Exception:
                 break
@@ -639,12 +712,14 @@ async def scrape_netflix(
 BIGTECH_SCRAPERS = {
     "amazon": scrape_amazon,
     "apple": scrape_apple,
+    "google": scrape_google,
+    "meta": scrape_meta,
+    "microsoft": scrape_microsoft,
     "netflix": scrape_netflix,
-    # Google, Meta, Microsoft — need Playwright for session cookies.
 }
 
-# Scrapers that need Playwright (browser-level session)
-BROWSER_ONLY_SCRAPERS = ["google", "meta", "microsoft"]
+# Previously browser-only — now all use httpx with SSR/JSON parsing
+BROWSER_ONLY_SCRAPERS: list[str] = []
 
 
 async def scrape_bigtech(

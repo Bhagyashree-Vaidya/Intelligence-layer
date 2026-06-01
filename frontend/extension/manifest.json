@@ -1,22 +1,13 @@
 {
   "manifest_version": 3,
   "name": "JobPilot Auto-Fill",
-  "version": "2.0.0",
-  "description": "Auto-fills job applications across Greenhouse, Lever, Ashby, Workday, and more ATS platforms.",
+  "version": "2.1.0",
+  "description": "Auto-fills job applications across Greenhouse, Lever, Ashby, Workday, company career pages, and more.",
   "permissions": ["activeTab", "storage", "scripting"],
   "host_permissions": [
     "https://jobs.shreevaidya.com/*",
-    "http://127.0.0.1:8000/*",
-    "https://boards.greenhouse.io/*",
-    "https://*.greenhouse.io/*",
-    "https://jobs.lever.co/*",
-    "https://*.lever.co/*",
-    "https://jobs.ashbyhq.com/*",
-    "https://*.ashbyhq.com/*",
-    "https://*.smartrecruiters.com/*",
-    "https://*.myworkdayjobs.com/*",
-    "https://apply.workable.com/*",
-    "https://*.workable.com/*"
+    "https://intelligence-layer.fly.dev/*",
+    "https://*/*"
   ],
   "content_scripts": [
     {
@@ -31,6 +22,18 @@
         "https://*.myworkdayjobs.com/*",
         "https://apply.workable.com/*",
         "https://*.workable.com/*"
+      ],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://*.icims.com/*",
+        "https://*.taleo.net/*",
+        "https://*.successfactors.com/*",
+        "https://*.brassring.com/*",
+        "https://*.jobvite.com/*",
+        "https://*.myworkdaysite.com/*"
       ],
       "js": ["content.js"],
       "run_at": "document_idle"

@@ -86,6 +86,13 @@ async def generate_message(job_id: int, body: dict | None = None):
     return {"message": message, "job": {"title": job["title"], "company": job["company"]}, **recruiter_urls}
 
 
+@router.post("/jobs/fix-dates")
+async def fix_dates():
+    """One-time fix: normalize all non-ISO dates in the jobs table."""
+    count = await db.normalize_job_dates()
+    return {"ok": True, "fixed": count}
+
+
 @router.get("/stats")
 async def get_stats():
     """Dashboard statistics."""

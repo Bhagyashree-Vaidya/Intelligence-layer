@@ -40,23 +40,31 @@
   function setNativeValue(el, value) {
     if (isHoneypot(el)) return false;
 
-    const proto = el.tagName === 'TEXTAREA'
-      ? window.HTMLTextAreaElement.prototype
-      : window.HTMLInputElement.prototype;
-    const nativeSetter = Object.getOwnPropertyDescriptor(proto, 'value')?.set;
+    /* Skip file inputs — browsers block setting their value for security */
+    if (el.type === 'file') return false;
 
-    if (nativeSetter) {
-      nativeSetter.call(el, value);
-    } else {
-      el.value = value;
+    try {
+      const proto = el.tagName === 'TEXTAREA'
+        ? window.HTMLTextAreaElement.prototype
+        : window.HTMLInputElement.prototype;
+      const nativeSetter = Object.getOwnPropertyDescriptor(proto, 'value')?.set;
+
+      if (nativeSetter) {
+        nativeSetter.call(el, value);
+      } else {
+        el.value = value;
+      }
+
+      /* Dispatch events in the order a real user would trigger them */
+      el.dispatchEvent(new Event('focus', { bubbles: true }));
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+      el.dispatchEvent(new Event('change', { bubbles: true }));
+      el.dispatchEvent(new Event('blur', { bubbles: true }));
+      return true;
+    } catch (e) {
+      console.warn('[JobPilot] Could not set value on', el.tagName, el.type, ':', e.message);
+      return false;
     }
-
-    /* Dispatch events in the order a real user would trigger them */
-    el.dispatchEvent(new Event('focus', { bubbles: true }));
-    el.dispatchEvent(new Event('input', { bubbles: true }));
-    el.dispatchEvent(new Event('change', { bubbles: true }));
-    el.dispatchEvent(new Event('blur', { bubbles: true }));
-    return true;
   }
 
   function selectOption(selectEl, value) {
@@ -176,33 +184,41 @@
       {
         value: profile.first_name,
         selectors: [
+          () => document.getElementById('first_name'),
           () => findByName('job_application[first_name]'),
           () => findByName('first_name'),
           () => findFieldFuzzy(['first_name', 'first-name', 'firstname', 'given-name', 'first name']),
+          () => findByLabel('First Name'),
         ],
       },
       {
         value: profile.last_name,
         selectors: [
+          () => document.getElementById('last_name'),
           () => findByName('job_application[last_name]'),
           () => findByName('last_name'),
           () => findFieldFuzzy(['last_name', 'last-name', 'lastname', 'family-name', 'last name']),
+          () => findByLabel('Last Name'),
         ],
       },
       {
         value: profile.email,
         selectors: [
+          () => document.getElementById('email'),
           () => findByName('job_application[email]'),
           () => findByName('email'),
           () => findFieldFuzzy(['email', 'e-mail', 'email_address']),
+          () => findByLabel('Email'),
         ],
       },
       {
         value: profile.phone,
         selectors: [
+          () => document.getElementById('phone'),
           () => findByName('job_application[phone]'),
           () => findByName('phone'),
           () => findFieldFuzzy(['phone', 'tel', 'mobile', 'phone_number']),
+          () => findByLabel('Phone'),
         ],
       },
       {
@@ -269,17 +285,45 @@
           () => findFieldFuzzy(['current_title', 'job_title', 'current title']),
         ],
       },
+      {
+        value: 'United States',
+        selectors: [
+          () => document.getElementById('country'),
+          () => findFieldFuzzy(['country']),
+          () => findByLabel('Country'),
+        ],
+        isSelect: true,
+        selectTerms: ['united states', 'us', 'usa'],
+      },
+      {
+        value: p => `${p.city || ''}, ${p.state || ''}`.replace(/^, |, $/, '') || 'California, United States',
+        selectors: [
+          () => document.getElementById('candidate-location'),
+          () => findFieldFuzzy(['candidate-location', 'location']),
+          () => findByLabel('Location'),
+        ],
+      },
     ];
 
-    for (const { value, selectors } of fieldMap) {
-      if (!value) continue;
-      for (const findFn of selectors) {
+    for (const entry of fieldMap) {
+      const val = typeof entry.value === 'function' ? entry.value(profile) : entry.value;
+      if (!val) continue;
+      for (const findFn of entry.selectors) {
         const el = findFn();
-        if (el && isVisible(el) && !isHoneypot(el) && !el.value) {
-          if (el.tagName === 'SELECT') {
-            if (selectOption(el, value)) { filled++; break; }
+        if (el && isVisible(el) && !isHoneypot(el)) {
+          /* Skip already-filled fields (but allow selects at index 0) */
+          if (el.tagName !== 'SELECT' && el.value) continue;
+          if (el.tagName === 'SELECT' && el.selectedIndex > 0) continue;
+
+          if (el.tagName === 'SELECT' || entry.isSelect) {
+            const terms = entry.selectTerms || [val.toLowerCase()];
+            let ok = false;
+            for (const term of terms) {
+              if (selectOption(el, term)) { ok = true; break; }
+            }
+            if (ok) { filled++; break; }
           } else {
-            if (setNativeValue(el, value)) { filled++; break; }
+            if (setNativeValue(el, val)) { filled++; break; }
           }
         }
       }
@@ -395,86 +439,359 @@
     return '';
   }
 
-  /** Handle Greenhouse-style custom questions — uses smart answer API + local fallback. */
+  /* ── INTELLIGENT ANSWER ENGINE ────────────────────────────────────────
+     Pattern-matched answers for 100+ common screening questions.
+     Each rule: [pattern_test_function, answer_or_answer_function]
+     Order matters — first match wins. */
+
+  function buildSmartAnswers(profile) {
+    const p = profile;
+    const linkedin = p.linkedin || '';
+    const website = p.website || '';
+    const github = p.github || '';
+
+    /* Each entry: [test(lowercaseQuestion) => bool, answer string or select-friendly values] */
+    return [
+      /* ── How did you hear ─────────────────────────────────────── */
+      [q => q.includes('how did you hear') || q.includes('how did you find') || q.includes('how did you learn') || q.includes('where did you hear') || q.includes('where did you find') || (q.includes('source') && q.includes('hear')),
+        { text: 'Google Search', select: ['google', 'search engine', 'career page', 'company website', 'job board', 'online', 'internet'] }],
+
+      /* ── Current / Recent Company ─────────────────────────────── */
+      [q => (q.includes('current') || q.includes('recent') || q.includes('present')) && q.includes('company'),
+        { text: 'University of Washington' }],
+      [q => (q.includes('current') || q.includes('recent') || q.includes('present')) && q.includes('employer'),
+        { text: 'University of Washington' }],
+      [q => (q.includes('current') || q.includes('recent')) && q.includes('title'),
+        { text: 'Product Lead - Starlink Satellite Data Platform' }],
+
+      /* ── Work Authorization ───────────────────────────────────── */
+      [q => (q.includes('authorized') || q.includes('authorised') || q.includes('legally')) && q.includes('work'),
+        { text: 'Yes', select: ['yes'] }],
+      [q => q.includes('sponsorship') || (q.includes('visa') && q.includes('sponsor')),
+        { text: 'Yes', select: ['yes'] }],
+      [q => q.includes('require visa') || q.includes('require work visa') || q.includes('immigration'),
+        { text: 'Yes', select: ['yes'] }],
+      [q => q.includes('visa status') || q.includes('current visa') || q.includes('immigration status'),
+        { text: 'F-1 Student (OPT/STEM OPT eligible)', select: ['f-1', 'opt', 'student'] }],
+      [q => q.includes('cpt') || q.includes('curricular practical'),
+        { text: 'Yes', select: ['yes'] }],
+      [q => q.includes('opt') && !q.includes('option'),
+        { text: 'Yes', select: ['yes'] }],
+      [q => q.includes('h-1b') || q.includes('h1b'),
+        { text: 'Yes', select: ['yes'] }],
+      [q => q.includes('export control') || q.includes('itar') || q.includes('ear'),
+        { text: 'None of the Above', select: ['none', 'no', 'not applicable'] }],
+      [q => q.includes('security clearance'),
+        { text: 'No', select: ['no', 'none', 'not applicable'] }],
+
+      /* ── Previously worked / interviewed ──────────────────────── */
+      [q => q.includes('previously') && (q.includes('work') || q.includes('employ')),
+        { text: 'No', select: ['no'] }],
+      [q => q.includes('interviewed') && (q.includes('before') || q.includes('previously') || q.includes('company')),
+        { text: 'No', select: ['no'] }],
+      [q => q.includes('know anyone') || q.includes('know somebody') || (q.includes('employee') && q.includes('refer')),
+        { text: 'No', select: ['no'] }],
+      [q => q.includes('family member') || q.includes('relative') || q.includes('related to'),
+        { text: 'No', select: ['no'] }],
+      [q => q.includes('non-compete') || q.includes('noncompete') || q.includes('non compete'),
+        { text: 'No', select: ['no'] }],
+      [q => q.includes('acquired') && q.includes('company'),
+        { text: 'No', select: ['no'] }],
+      [q => q.includes('applied') && (q.includes('before') || q.includes('previously')),
+        { text: 'No', select: ['no'] }],
+
+      /* ── Experience ───────────────────────────────────────────── */
+      [q => q.includes('years') && q.includes('experience') && q.includes('product'),
+        { text: '3+', select: ['3', '4', '5', '3-5', '3+', '2-4'] }],
+      [q => q.includes('years') && q.includes('experience') && (q.includes('software') || q.includes('tech') || q.includes('industry')),
+        { text: '6+', select: ['6', '7', '5+', '6+', '5-7', '6-8'] }],
+      [q => q.includes('years') && q.includes('experience'),
+        { text: String(p.years_experience || '6'), select: ['6', '5+', '6+'] }],
+
+      /* ── Education ────────────────────────────────────────────── */
+      [q => q.includes('highest') && (q.includes('degree') || q.includes('education') || q.includes('level')),
+        { text: "Master's Degree", select: ["master", "ms", "graduate", "master's"] }],
+      [q => q.includes('university') || q.includes('school') || q.includes('college'),
+        { text: 'University of Washington' }],
+      [q => (q.includes('major') || q.includes('field of study') || q.includes('area of study')),
+        { text: 'Information Management (MSIM)' }],
+      [q => q.includes('gpa'),
+        { text: '3.84' }],
+      [q => q.includes('graduation') && (q.includes('year') || q.includes('date')),
+        { text: 'June 2026', select: ['2026'] }],
+
+      /* ── Salary & Start ───────────────────────────────────────── */
+      [q => q.includes('salary') || q.includes('compensation') || q.includes('pay expectation'),
+        { text: 'Open to discussing total compensation based on role scope, level, location, and benefits.' }],
+      [q => q.includes('start date') || q.includes('earliest') && q.includes('start') || q.includes('when can you'),
+        { text: '2 weeks from offer acceptance' }],
+
+      /* ── Relocation & Location ────────────────────────────────── */
+      [q => q.includes('relocat'),
+        { text: 'Yes', select: ['yes'] }],
+      [q => q.includes('hybrid'),
+        { text: 'Yes', select: ['yes'] }],
+      [q => q.includes('onsite') || q.includes('on-site') || q.includes('in office') || q.includes('in-office'),
+        { text: 'Yes', select: ['yes'] }],
+      [q => q.includes('remote') && (q.includes('comfortable') || q.includes('willing') || q.includes('open')),
+        { text: 'Yes', select: ['yes'] }],
+      [q => q.includes('time zone') || q.includes('timezone'),
+        { text: 'Yes', select: ['yes'] }],
+      [q => q.includes('located') && (q.includes('us') || q.includes('united states')),
+        { text: 'Yes', select: ['yes'] }],
+      [q => q.includes('current location') || q.includes('where are you located') || q.includes('current city'),
+        { text: 'California, United States' }],
+
+      /* ── Demographics / EEO ───────────────────────────────────── */
+      [q => q.includes('gender') && (q.includes('identity') || q.includes('identify')),
+        { text: 'Female', select: ['female', 'woman', 'cisgender woman'] }],
+      [q => q.includes('gender') || q.includes('sex'),
+        { text: 'Female', select: ['female', 'woman'] }],
+      [q => q.includes('transgender'),
+        { text: 'No', select: ['no'] }],
+      [q => q.includes('sexual orientation'),
+        { text: 'Heterosexual', select: ['heterosexual', 'straight'] }],
+      [q => q.includes('pronoun'),
+        { text: 'She/Her', select: ['she', 'she/her', 'she/her/hers'] }],
+      [q => q.includes('ethnicit') || (q.includes('race') && !q.includes('embrace')),
+        { text: 'South Asian', select: ['south asian', 'asian', 'asian (not hispanic or latino)'] }],
+      [q => q.includes('veteran') || q.includes('military') || q.includes('served'),
+        { text: 'No military service', select: ['no military', 'not a protected veteran', 'i am not', 'no', 'not a veteran'] }],
+      [q => q.includes('disability') || q.includes('disabled') || q.includes('ada'),
+        { text: 'No, I do not have a disability, or have a history/record of having a disability', select: ['no, i do not', 'no', 'do not have a disability', 'no disability'] }],
+
+      /* ── Background / Compliance ──────────────────────────────── */
+      [q => q.includes('background check'),
+        { text: 'Yes', select: ['yes'] }],
+      [q => q.includes('drug') && (q.includes('screen') || q.includes('test')),
+        { text: 'Yes', select: ['yes'] }],
+      [q => q.includes('assessment') || q.includes('aptitude test') || q.includes('coding challenge'),
+        { text: 'Yes', select: ['yes'] }],
+      [q => q.includes('employment verification') || q.includes('verify employment'),
+        { text: 'Yes', select: ['yes'] }],
+      [q => q.includes('reference'),
+        { text: 'Yes, upon request', select: ['yes'] }],
+      [q => q.includes('currently employed'),
+        { text: 'Yes', select: ['yes'] }],
+
+      /* ── Skills & Tools ───────────────────────────────────────── */
+      [q => q.includes('programming') && q.includes('language'),
+        { text: 'Python, JavaScript, TypeScript, SQL' }],
+      [q => q.includes('pm tool') || q.includes('product management tool'),
+        { text: 'Jira, Figma, Amplitude, Mixpanel, VWO (A/B Testing)' }],
+      [q => q.includes('sql'),
+        { text: 'Basic to Intermediate', select: ['intermediate', 'basic', 'yes'] }],
+      [q => q.includes('cloud') && q.includes('platform'),
+        { text: 'AWS (EC2, S3, CloudFront)' }],
+      [q => q.includes('agile') || q.includes('scrum'),
+        { text: 'Yes', select: ['yes'] }],
+
+      /* ── Links ────────────────────────────────────────────────── */
+      [q => q.includes('linkedin'),
+        { text: linkedin }],
+      [q => q.includes('github'),
+        { text: github }],
+      [q => q.includes('portfolio') || q.includes('personal website') || q.includes('personal site'),
+        { text: website }],
+      [q => q.includes('website') || q.includes('url') || q.includes('online presence'),
+        { text: website || linkedin }],
+
+      /* ── Motivation / Why ─────────────────────────────────────── */
+      [q => q.includes('why') && (q.includes('interest') || q.includes('role') || q.includes('position') || q.includes('apply')),
+        { text: 'The role aligns with my background in product management, software engineering, and AI-driven products. I am excited about building products that solve complex customer and business problems at scale.' }],
+      [q => q.includes('why') && (q.includes('leav') || q.includes('looking') || q.includes('change')),
+        { text: 'I am pursuing opportunities that provide greater scope, impact, and long-term growth aligned with my product leadership goals.' }],
+      [q => q.includes('strength') || q.includes('strong fit') || q.includes('what makes you'),
+        { text: 'I combine product management, engineering, analytics, UX, and customer-facing experience, enabling me to translate business needs into scalable product solutions.' }],
+      [q => q.includes('describe yourself') || q.includes('about yourself') || q.includes('tell us about you'),
+        { text: 'Product leader with a software engineering foundation who specializes in building data-driven and AI-enabled products.' }],
+
+      /* ── Catch-all Yes/No for common boolean questions ─────── */
+      [q => q.includes('18 years') || q.includes('over 18') || q.includes('at least 18'),
+        { text: 'Yes', select: ['yes'] }],
+      [q => q.includes('agree') && (q.includes('terms') || q.includes('condition') || q.includes('privacy')),
+        { text: 'Yes', select: ['yes'] }],
+    ];
+  }
+
+  /** Handle ALL custom/screening questions — both Greenhouse-style and generic. */
   function fillCustomQuestions(profile) {
-    /* Collect all custom question fields and their labels */
-    const answerFields = document.querySelectorAll(
+    const smartAnswers = buildSmartAnswers(profile);
+
+    /* ── Step 1: Collect ALL question fields on the page ───────── */
+    /* Greenhouse specific */
+    const ghFields = document.querySelectorAll(
       'input[name*="answers_attributes"], textarea[name*="answers_attributes"], select[name*="answers_attributes"]'
+    );
+
+    /* Generic: any labeled input/select/textarea that's a "question" */
+    const allFields = document.querySelectorAll(
+      'input:not([type="hidden"]):not([type="file"]):not([type="submit"]):not([type="button"]):not([type="checkbox"]):not([type="radio"]), textarea, select'
     );
 
     const questionsToAsk = [];
     const fieldsByQuestion = {};
+    const processedFields = new Set();
 
-    for (const field of answerFields) {
-      if (!isVisible(field) || field.value) continue;
+    /* Helper: get the question text for a field */
+    function getQuestionText(field) {
+      /* Check closest label */
+      const id = field.id;
+      if (id) {
+        const label = document.querySelector(`label[for="${id}"]`);
+        if (label) return label.textContent.trim();
+      }
+      /* Check parent containers for label */
+      const container = field.closest('.field, .field-group, [class*="question"], [class*="field"], [class*="form-group"], [class*="form__field"], [role="group"]');
+      if (container) {
+        const label = container.querySelector('label, legend, [class*="label"], [class*="question-text"]');
+        if (label) return label.textContent.trim();
+      }
+      /* Check wrapping label */
+      const parentLabel = field.closest('label');
+      if (parentLabel) return parentLabel.textContent.trim();
+      /* Aria label */
+      const ariaLabel = field.getAttribute('aria-label');
+      if (ariaLabel) return ariaLabel.trim();
+      /* Placeholder as last resort */
+      if (field.placeholder) return field.placeholder.trim();
+      return '';
+    }
 
-      const container = field.closest('.field, .field-group, [class*="question"], [class*="field"]');
-      const label = container?.querySelector('label') || field.closest('label');
-      if (!label) continue;
+    /* Collect Greenhouse custom question fields */
+    for (const field of ghFields) {
+      if (!isVisible(field) || field.value || field.type === 'file') continue;
+      const qText = getQuestionText(field);
+      if (qText && qText.length > 3) {
+        questionsToAsk.push(qText);
+        fieldsByQuestion[qText] = field;
+        processedFields.add(field);
+      }
+    }
 
-      const qText = label.textContent.trim();
-      questionsToAsk.push(qText);
-      fieldsByQuestion[qText] = field;
+    /* Collect ALL other unfilled question fields */
+    for (const field of allFields) {
+      if (processedFields.has(field)) continue;
+      if (!isVisible(field) || field.type === 'file') continue;
+      if (field.value && field.tagName !== 'SELECT') continue;
+      if (field.tagName === 'SELECT' && field.selectedIndex > 0) continue;
+
+      const qText = getQuestionText(field);
+      if (qText && qText.length > 3) {
+        /* Skip fields already handled by the main fillFields (name, email, phone, etc.) */
+        const skip = ['first name', 'last name', 'email', 'phone', 'resume', 'cover letter',
+                      'country', 'location', 'city', 'state', 'zip', 'address', 'preferred first'];
+        const lower = qText.toLowerCase();
+        if (skip.some(s => lower.startsWith(s) || lower === s)) continue;
+
+        questionsToAsk.push(qText);
+        fieldsByQuestion[qText] = field;
+        processedFields.add(field);
+      }
     }
 
     if (questionsToAsk.length === 0) return;
+    console.log(`[JobPilot] Found ${questionsToAsk.length} screening questions`);
 
-    /* Local quick answers (no API call needed) */
-    const localAnswers = {};
+    /* ── Step 2: Match questions against smart answers ─────────── */
+    const answered = {};
+    const unanswered = [];
+
     for (const qText of questionsToAsk) {
-      const lower = qText.toLowerCase();
-      if (lower.includes('years') && lower.includes('experience')) {
-        localAnswers[qText] = String(profile.years_experience || '');
-      } else if (lower.includes('salary') || lower.includes('compensation')) {
-        localAnswers[qText] = ''; /* Skip — user decides */
-      } else if (lower.includes('start date') || lower.includes('available')) {
-        localAnswers[qText] = ''; /* Skip — user decides */
-      } else if (lower.includes('how did you hear') || lower.includes('referral')) {
-        localAnswers[qText] = 'Online Job Board';
-      } else if (lower.includes('authorized') || lower.includes('legally')) {
-        localAnswers[qText] = profile.work_auth || 'Yes';
-      } else if (lower.includes('sponsor')) {
-        localAnswers[qText] = profile.sponsorship || 'No';
-      } else if (lower.includes('linkedin')) {
-        localAnswers[qText] = profile.linkedin || '';
-      } else if (lower.includes('github') || lower.includes('portfolio')) {
-        localAnswers[qText] = profile.github || profile.website || '';
-      } else if (lower.includes('website') || lower.includes('url') || lower.includes('link')) {
-        localAnswers[qText] = profile.website || profile.linkedin || '';
+      const lower = qText.toLowerCase().replace(/\s+/g, ' ').replace(/[*]/g, '').trim();
+      let matched = false;
+
+      for (const [test, answerData] of smartAnswers) {
+        if (test(lower)) {
+          const field = fieldsByQuestion[qText];
+          const answer = typeof answerData === 'string' ? { text: answerData } : answerData;
+
+          if (field.tagName === 'SELECT') {
+            /* Try select-friendly values first, then text */
+            const selectTerms = answer.select || [answer.text.toLowerCase()];
+            let selected = false;
+            for (const term of selectTerms) {
+              if (selectOption(field, term)) { selected = true; break; }
+            }
+            if (selected) { matched = true; answered[qText] = true; }
+          } else if (field.type === 'radio') {
+            /* Handle radio button groups */
+            const name = field.name;
+            const radios = name ? document.querySelectorAll(`input[name="${name}"]`) : [field];
+            const terms = answer.select || [answer.text.toLowerCase()];
+            for (const radio of radios) {
+              const lbl = radio.closest('label')?.textContent?.trim()?.toLowerCase() || radio.value?.toLowerCase() || '';
+              if (terms.some(t => lbl.includes(t))) {
+                radio.click();
+                matched = true;
+                answered[qText] = true;
+                break;
+              }
+            }
+          } else {
+            if (answer.text && setNativeValue(field, answer.text)) {
+              matched = true;
+              answered[qText] = true;
+            }
+          }
+          break; /* First match wins */
+        }
+      }
+
+      if (!matched) {
+        unanswered.push(qText);
       }
     }
 
-    /* Apply local answers immediately */
-    for (const [qText, answer] of Object.entries(localAnswers)) {
-      if (!answer) continue;
-      const field = fieldsByQuestion[qText];
-      if (field && isVisible(field)) {
-        if (field.tagName === 'SELECT') selectOption(field, answer);
-        else setNativeValue(field, answer);
-      }
-    }
+    console.log(`[JobPilot] Answered ${Object.keys(answered).length} questions locally, ${unanswered.length} need API`);
 
-    /* For remaining unanswered questions (like "Why this company?"),
-       call the smart answer API asynchronously */
-    const unanswered = questionsToAsk.filter(q => !localAnswers[q]);
+    /* ── Step 3: For unanswered questions, try the answer bank API ── */
     if (unanswered.length > 0) {
       const company = detectCompany();
       const roleTitle = detectRoleTitle();
 
-      chrome.runtime.sendMessage({
-        action: 'getSmartAnswers',
-        questions: unanswered,
-        company: company,
-        role_title: roleTitle,
-      }, (resp) => {
-        if (!resp?.ok || !resp.answers) return;
-        for (const [qText, answer] of Object.entries(resp.answers)) {
-          if (!answer) continue;
-          const field = fieldsByQuestion[qText];
-          if (field && isVisible(field) && !field.value) {
-            if (field.tagName === 'SELECT') selectOption(field, answer);
-            else setNativeValue(field, answer);
+      const bankPromises = unanswered.map(qText =>
+        new Promise(resolve => {
+          chrome.runtime.sendMessage({ action: 'lookupAnswer', question: qText }, (resp) => {
+            resolve({ question: qText, answer: resp?.ok && resp.answer ? resp.answer : null });
+          });
+        })
+      );
+
+      Promise.all(bankPromises).then(bankResults => {
+        const stillUnanswered = [];
+
+        for (const { question, answer } of bankResults) {
+          if (answer) {
+            const field = fieldsByQuestion[question];
+            if (field && isVisible(field) && !field.value) {
+              if (field.tagName === 'SELECT') selectOption(field, answer);
+              else setNativeValue(field, answer);
+            }
+          } else {
+            stillUnanswered.push(question);
           }
+        }
+
+        /* Step 4: Final fallback — smart answer API */
+        if (stillUnanswered.length > 0) {
+          console.log(`[JobPilot] ${stillUnanswered.length} questions sent to smart answer API:`, stillUnanswered);
+          chrome.runtime.sendMessage({
+            action: 'getSmartAnswers',
+            questions: stillUnanswered,
+            company: company,
+            role_title: roleTitle,
+          }, (resp) => {
+            if (!resp?.ok || !resp.answers) return;
+            for (const [qText, answer] of Object.entries(resp.answers)) {
+              if (!answer) continue;
+              const field = fieldsByQuestion[qText];
+              if (field && isVisible(field) && !field.value) {
+                if (field.tagName === 'SELECT') selectOption(field, answer);
+                else setNativeValue(field, answer);
+              }
+            }
+          });
         }
       });
     }
@@ -602,7 +919,7 @@
     });
 
     if (!data?.ok || !data.profile) {
-      console.log('[JobPilot] No profile data — set up your profile at http://127.0.0.1:8000/profile');
+      console.log('[JobPilot] No profile data — set up your profile at https://hire.shreevaidya.com/profile');
       return;
     }
 

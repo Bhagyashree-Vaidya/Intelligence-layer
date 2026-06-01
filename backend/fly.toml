@@ -1,0 +1,39 @@
+# ─── Fly.io Configuration ─────────────────────────────
+# Deploy:  cd backend && fly deploy
+# Secrets: fly secrets set SUPABASE_URL=... SUPABASE_SERVICE_ROLE_KEY=... etc.
+
+app = "intelligence-layer"
+primary_region = "sjc"          # San Jose — matches current deployment
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  FRONTEND_URL = "https://hire.shreevaidya.com"
+  BACKEND_URL  = "https://jobs.shreevaidya.com"
+  ENVIRONMENT  = "production"
+  LOG_LEVEL    = "INFO"
+  PORT         = "8000"
+
+[http_service]
+  internal_port = 8000
+  force_https   = true
+  auto_stop_machines  = "suspend"   # save money when idle
+  auto_start_machines = true        # wake on first request
+  min_machines_running = 0
+
+  [http_service.concurrency]
+    type       = "connections"
+    hard_limit = 250
+    soft_limit = 200
+
+[[http_service.checks]]
+  interval     = "15s"
+  timeout      = "5s"
+  grace_period = "10s"
+  method       = "GET"
+  path         = "/health"
+
+[[vm]]
+  size   = "shared-cpu-1x"
+  memory = "1024mb"

@@ -4,8 +4,8 @@ Job application automation platform — scrapes 250+ companies, scores relevancy
 
 ```
 project/
-├── frontend/          # Next.js app → Vercel (shreevaidya.com)
-├── backend/           # FastAPI API → Render (jobs.shreevaidya.com)
+├── frontend/          # Next.js app → Vercel (hire.shreevaidya.com)
+├── backend/           # FastAPI API → Fly.io (jobs.shreevaidya.com)
 ├── CONTEXT.md         # Architecture deep-dive
 ├── KNOWLEDGE_GRAPH.md # System diagrams
 └── PLAYBOOK.md        # Day-to-day workflow guide
@@ -49,24 +49,35 @@ Set `NEXT_PUBLIC_API_URL=http://localhost:8000` in `.env.local` for local develo
    - **anon key** → `NEXT_PUBLIC_SUPABASE_ANON_KEY` (frontend only)
    - **service_role key** → `SUPABASE_SERVICE_ROLE_KEY` (backend only, never expose)
 
-### 2. Deploy Backend to Render
+### 2. Deploy Backend to Fly.io
 
-1. Go to [render.com](https://render.com) → **New Web Service**
-2. Connect your GitHub repo
-3. Settings:
-   - **Root Directory**: `backend`
-   - **Runtime**: Docker
-   - **Health Check Path**: `/health`
-4. Add environment variables:
-   | Variable | Value |
-   |----------|-------|
-   | `SUPABASE_URL` | `https://xxx.supabase.co` |
-   | `SUPABASE_SERVICE_ROLE_KEY` | `eyJ...` |
-   | `OPENAI_API_KEY` | `sk-...` |
-   | `CLAUDE_API` | `sk-ant-...` |
-   | `APIFY_TOKEN` | `apify_api_...` |
-   | `FRONTEND_URL` | `https://shreevaidya.com` |
-5. Deploy. Note your Render URL (e.g., `jobpilot-api.onrender.com`)
+1. Install the Fly CLI: `curl -L https://fly.io/install.sh | sh`
+2. Authenticate: `fly auth login`
+3. From the `backend/` directory:
+
+```bash
+cd backend
+fly launch          # creates app, picks region (default: sea)
+```
+
+4. Set secrets (never committed to git):
+
+```bash
+fly secrets set \
+  SUPABASE_URL=https://xxx.supabase.co \
+  SUPABASE_SERVICE_ROLE_KEY=eyJ... \
+  OPENAI_API_KEY=sk-... \
+  CLAUDE_API=sk-ant-... \
+  APIFY_TOKEN=apify_api_...
+```
+
+5. Deploy:
+
+```bash
+fly deploy
+```
+
+6. Note your Fly hostname (e.g., `intelligence-layer.fly.dev`)
 
 ### 3. Deploy Frontend to Vercel
 
@@ -96,22 +107,26 @@ This is configured automatically when you add the domain in Vercel project setti
 | `A` | `@` | `76.76.21.21` | Auto |
 | `CNAME` | `www` | `cname.vercel-dns.com` | Auto |
 
-#### `jobs.shreevaidya.com` → Render backend
+#### `jobs.shreevaidya.com` → Fly.io backend
 
 | Type | Name | Value | TTL |
 |------|------|-------|-----|
-| `CNAME` | `jobs` | `jobpilot-api.onrender.com` | Auto |
+| `CNAME` | `jobs` | `intelligence-layer.fly.dev` | Auto |
 
-> Replace `jobpilot-api.onrender.com` with your actual Render service hostname.
+> Replace `intelligence-layer.fly.dev` with your actual Fly app hostname.
 
-Then in Render dashboard → your service → **Custom Domains** → add `jobs.shreevaidya.com`.
+Then add the custom domain to your Fly app:
+
+```bash
+fly certs add jobs.shreevaidya.com
+```
 
 ### 5. Chrome Extension
 
 1. Open `chrome://extensions`
 2. Enable Developer Mode
 3. Click "Load unpacked" → select `frontend/extension/`
-4. The extension calls `https://jobs.shreevaidya.com/api/profile`
+4. The extension calls `https://intelligence-layer.fly.dev/api/profile`
 
 ---
 
@@ -120,7 +135,7 @@ Then in Render dashboard → your service → **Custom Domains** → add `jobs.s
 | Layer | Tech | Host |
 |-------|------|------|
 | Frontend | Next.js 15, React 19 | Vercel |
-| Backend | FastAPI, Python 3.13 | Render (Docker) |
+| Backend | FastAPI, Python 3.13 | Fly.io (Docker) |
 | Database | PostgreSQL | Supabase |
 | Scraping | httpx (async), Apify | Backend process |
 | Extension | Chrome Manifest V3 | Local |
@@ -128,7 +143,7 @@ Then in Render dashboard → your service → **Custom Domains** → add `jobs.s
 ### Why this split?
 
 - **Vercel** for the frontend: instant deploys, edge CDN, zero config for Next.js
-- **Render** for the backend: persistent processes (scraping takes minutes), Docker support (Puppeteer needs system libs), WebSocket support, cron-friendly
+- **Fly.io** for the backend: persistent VMs (scraping takes minutes), Docker support (Puppeteer needs system libs), WebSocket support, auto-suspend to save cost, global edge deployment
 - **Supabase** for the database: managed PostgreSQL, real-time subscriptions available, row-level security when needed, generous free tier
 
 ### Security
@@ -136,4 +151,4 @@ Then in Render dashboard → your service → **Custom Domains** → add `jobs.s
 - `SUPABASE_SERVICE_ROLE_KEY` only on the backend, never exposed to the browser
 - `NEXT_PUBLIC_*` variables are the only ones the frontend sees
 - CORS restricts API access to `shreevaidya.com` and the Chrome extension
-- Apify token and AI keys live only in Render environment variables
+- Apify token and AI keys live only in Fly.io secrets (encrypted at rest)

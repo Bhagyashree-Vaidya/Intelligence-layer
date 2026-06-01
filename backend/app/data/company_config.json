@@ -54,7 +54,70 @@
     "grafana": "grafanalabs",
     "anduril": "andurilindustries",
     "segment": "twilio",
-    "drift": "salesloft"
+    "drift": "salesloft",
+    "dropbox": "dropbox",
+    "gusto": "gusto",
+    "airtable": "airtable",
+    "webflow": "webflow",
+    "noom": "noom",
+    "faire": "faire",
+    "calm": "calm",
+    "verkada": "verkada",
+    "rivian": "rivian",
+    "aurora": "aaborainc",
+    "nuro": "nuro",
+    "cruise": "cruise",
+    "waymo": "waymo",
+    "sentinelone": "sentinelone",
+    "zscaler": "zscaler",
+    "paloaltonetworks": "paboradoaltonetworks",
+    "snyk": "snikibrmd",
+    "sqsp": "squarespace",
+    "coupang": "coupang",
+    "unity": "unity3d",
+    "epicgames": "epicgames",
+    "niantic": "niantic",
+    "twitch": "twitch",
+    "wiz": "wizinc",
+    "lacework": "lacaborework",
+    "cockroachlabs": "cockroachlabs",
+    "planetscale": "planetscale",
+    "temporal": "temporaltechnologies",
+    "materialize": "materialize",
+    "drata": "drata",
+    "vanta": "vanta",
+    "snorkel": "snorkelai",
+    "cohere": "cohere",
+    "mistralai": "mistral",
+    "huggingface": "huggingfaceh4",
+    "replit": "replit",
+    "vercel": "vercel",
+    "supabase": "supabase",
+    "linear": "linear56",
+    "loom": "loom",
+    "miro": "miro",
+    "canva": "canva",
+    "notion": "notion",
+    "zapier": "zapier",
+    "calendly": "calendly",
+    "typeform": "typeform",
+    "contentful": "contentful",
+    "retool": "retool",
+    "netlify": "netlify",
+    "hashicorp2": "hashicorp",
+    "elastic2": "elastic",
+    "flexport": "flexport",
+    "opendoor": "opendoor",
+    "thumbtack": "thumbtack",
+    "samsara": "samsara",
+    "benchling": "benchling",
+    "rippling": "rippling",
+    "brex2": "brex",
+    "linkedin": "linkedin",
+    "qualtrics": "qualtrics",
+    "block": "block",
+    "coinbase": "coinbase",
+    "disney": "disney"
   },
   "lever": {
     "atlassian": "atlassian",
@@ -64,7 +127,24 @@
     "wealthfront": "wealthfront",
     "clari": "clari",
     "palantir": "palantir",
-    "spotify": "spotify"
+    "spotify": "spotify",
+    "netflix": "netflix",
+    "squarespace": "squarespace",
+    "nerdwallet": "nerdwallet",
+    "relativityspace": "relativityspace",
+    "tempus": "tempus",
+    "blend": "blend",
+    "compass": "compass",
+    "grammarly2": "grammarly",
+    "eventbrite": "eventbrite",
+    "mapbox": "mapbox",
+    "lucid": "lucid",
+    "procore": "procore",
+    "sentry": "sentry",
+    "upstart": "upstart",
+    "clearbit": "clearbit",
+    "stytch": "stytch",
+    "deel": "deel"
   },
   "ashby": {
     "docker": "docker",
@@ -72,17 +152,41 @@
     "openai": "openai",
     "snowflake": "snowflake",
     "confluent": "confluent",
-    "notion": "notion",
+    "notion2": "notion",
     "quora": "quora",
     "strava": "strava",
-    "perplexityai": "perplexity"
+    "perplexityai": "perplexity",
+    "deel2": "Deel",
+    "linear2": "linear",
+    "retool2": "retool",
+    "supabase2": "supabase",
+    "resend": "resend",
+    "turso": "turso",
+    "railway": "railway",
+    "replicate": "replicate",
+    "together": "togetherai",
+    "sambanova": "sambanova",
+    "cerebras": "cerebras",
+    "anyscale": "anyscale",
+    "modal": "modal",
+    "fly": "fly",
+    "render": "render",
+    "planetscale2": "planetscale",
+    "neon": "neon"
   },
   "smartrecruiters": {
     "hashicorp": "HashiCorp",
     "zendesk": "Zendesk",
     "revolut": "Revolut",
     "klarna": "Klarna1",
-    "grammarly": "Grammarly"
+    "grammarly": "Grammarly",
+    "visa": "Visa",
+    "bosch": "BoschGroup",
+    "sap": "SAPCareers",
+    "docusign": "DocuSign",
+    "purestorage": "PureStorage",
+    "hpe": "HewlettPackardEnterprise",
+    "nutanix": "NutanixInc"
   },
   "workday": {
     "salesforce": {
@@ -106,80 +210,24 @@
       "company": "etsy",
       "board": "Etsy_Careers"
     },
-    "uber": {
-      "host": "uber.wd5.myworkdayjobs.com",
-      "company": "uber",
-      "board": "Uber"
+    "nvidia": {
+      "host": "nvidia.wd5.myworkdayjobs.com",
+      "company": "nvidia",
+      "board": "NVIDIAExternalCareerSite"
     },
-    "coinbase": {
-      "host": "coinbase.wd1.myworkdayjobs.com",
-      "company": "coinbase",
-      "board": "Coinbase"
+    "intel": {
+      "host": "intel.wd1.myworkdayjobs.com",
+      "company": "intel",
+      "board": "External"
     },
-    "doordash": {
-      "host": "doordash.wd1.myworkdayjobs.com",
-      "company": "doordash",
-      "board": "DoorDash"
-    },
-    "box": {
-      "host": "box.wd1.myworkdayjobs.com",
-      "company": "box",
-      "board": "Box"
-    },
-    "snapchat": {
-      "host": "snap.wd5.myworkdayjobs.com",
-      "company": "snap",
-      "board": "Snap"
-    },
-    "canva": {
-      "host": "canva.wd1.myworkdayjobs.com",
-      "company": "canva",
-      "board": "Canva"
-    },
-    "bumble": {
-      "host": "bumble.wd3.myworkdayjobs.com",
-      "company": "bumble",
-      "board": "Bumble"
-    },
-    "tinder": {
-      "host": "matchgroup.wd1.myworkdayjobs.com",
-      "company": "matchgroup",
-      "board": "MatchGroup",
-      "note": "Tinder = Match Group"
-    },
-    "bolt": {
-      "host": "bolt.wd3.myworkdayjobs.com",
-      "company": "bolt",
-      "board": "Bolt"
+    "dell": {
+      "host": "dell.wd1.myworkdayjobs.com",
+      "company": "dell",
+      "board": "External"
     }
   },
   "workable": {
     "huggingface": "huggingface"
   },
-  "custom": {
-    "looker": {
-      "note": "Looker = Google, use careers.google.com"
-    },
-    "warbyparker": {
-      "careers_url": "https://www.warbyparker.com/jobs"
-    },
-    "checkout": {
-      "careers_url": "https://www.checkout.com/careers"
-    },
-    "thoughtspot": {
-      "careers_url": "https://www.thoughtspot.com/careers"
-    },
-    "alteryx": {
-      "careers_url": "https://www.alteryx.com/careers"
-    },
-    "snyk": {
-      "careers_url": "https://snyk.io/careers"
-    },
-    "chainalysis": {
-      "careers_url": "https://www.chainalysis.com/careers"
-    },
-    "ironclad": {
-      "careers_url": "https://ironcladapp.com/careers"
-    }
-  }
+  "custom": {}
 }

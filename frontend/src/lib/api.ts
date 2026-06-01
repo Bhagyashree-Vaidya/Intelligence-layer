@@ -1,5 +1,5 @@
 /**
- * API client — all requests go to the backend at jobs.shreevaidya.com.
+ * API client — all requests go to the FastAPI backend on Fly.io.
  * Never exposes secrets; uses only the public NEXT_PUBLIC_API_URL.
  */
 
@@ -129,5 +129,92 @@ export function generateAnswers(questions: string[], company: string, roleTitle:
   return request<Record<string, string>>("/api/answers", {
     method: "POST",
     body: JSON.stringify({ questions, company, role_title: roleTitle }),
+  });
+}
+
+// ── Signals ───────────────────────────────────────────────────────────────
+
+export interface Signal {
+  id: number;
+  post_url: string;
+  content: string;
+  author_name: string;
+  author_title: string;
+  author_url: string;
+  author_company: string;
+  platform: string;
+  likes: number;
+  comments: number;
+  reposts: number;
+  posted_at: string;
+  scraped_at: string;
+  hiring_intent: number;
+  role_mentioned: string;
+  company_mentioned: string;
+  seniority_level: string;
+  is_recruiter: boolean;
+  outreach_viability: number;
+  urgency_score: number;
+  suggested_action: string;
+  ai_reason: string;
+  outreach_sent: boolean;
+}
+
+export interface SignalsResponse {
+  signals: Signal[];
+  total: number;
+  page: number;
+  per_page: number;
+  pages: number;
+}
+
+export interface SignalStats {
+  total_signals: number;
+  high_intent: number;
+  actionable: number;
+  contacts: number;
+}
+
+export interface Contact {
+  id: number;
+  name: string;
+  title: string;
+  company: string;
+  linkedin_url: string;
+  is_recruiter: boolean;
+  first_seen_at: string;
+  last_seen_at: string;
+  interaction_count: number;
+  latest_role_mentioned: string;
+  outreach_status: string;
+}
+
+export function getSignals(params: Record<string, string> = {}): Promise<SignalsResponse> {
+  const qs = new URLSearchParams(params).toString();
+  return request(`/api/signals${qs ? `?${qs}` : ""}`);
+}
+
+export function getSignalStats(): Promise<SignalStats> {
+  return request("/api/signals/stats");
+}
+
+export function triggerSignalScan(): Promise<{ status: string; message: string }> {
+  return request("/api/signals/scan", { method: "POST" });
+}
+
+export function getContacts(params: Record<string, string> = {}): Promise<{ contacts: Contact[]; total: number }> {
+  const qs = new URLSearchParams(params).toString();
+  return request(`/api/signals/contacts${qs ? `?${qs}` : ""}`);
+}
+
+export function generateOutreach(data: {
+  post_content: string;
+  author_name: string;
+  author_title: string;
+  role_mentioned?: string;
+}): Promise<{ outreach_message: string }> {
+  return request("/api/signals/outreach", {
+    method: "POST",
+    body: JSON.stringify(data),
   });
 }

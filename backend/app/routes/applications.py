@@ -3,6 +3,7 @@
 from fastapi import APIRouter
 
 from app import database as db
+from app.logger import log
 
 router = APIRouter(prefix="/api", tags=["applications"])
 
@@ -25,9 +26,25 @@ async def list_applications(status: str = ""):
 
 @router.post("/track/{job_id}")
 async def track_application(job_id: int, body: dict | None = None):
-    """Chrome extension or frontend calls this after submitting an application."""
+    """Chrome extension or frontend calls this after submitting an application.
+
+    If already tracked, updates the status instead of creating a duplicate.
+    """
     status = (body or {}).get("status", "applied")
+
+    # Check if already tracked (avoid duplicates)
+    existing = await db.get_application_by_job_id(job_id)
+    if existing:
+        # If existing is "saved" and new is "applied", upgrade it
+        if existing["status"] == "saved" and status == "applied":
+            await db.update_application_status(existing["id"], "applied")
+            log.info(f"Application upgraded: job {job_id} saved → applied")
+            return {"ok": True, "id": existing["id"], "updated": True}
+        # Already tracked at same or higher status
+        return {"ok": True, "id": existing["id"], "already_tracked": True}
+
     app_id = await db.save_application(job_id, None, status)
+    log.info(f"Application tracked: job {job_id} → {status}")
     return {"ok": True, "id": app_id}
 
 
@@ -38,4 +55,12 @@ async def update_status(app_id: int, body: dict):
     if not status:
         return {"error": "status required"}, 400
     await db.update_application_status(app_id, status)
+    log.info(f"Application {app_id} → {status}")
     return {"ok": True}
+
+
+@router.get("/applications/summary")
+async def application_summary():
+    """Quick summary for dashboard counter — lightweight."""
+    stats = await db.get_application_stats()
+    return stats

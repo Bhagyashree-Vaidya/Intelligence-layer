@@ -93,7 +93,10 @@ def load_apify_config() -> dict:
     if CONFIG_FILE.exists():
         try:
             raw = yaml.safe_load(CONFIG_FILE.read_text()) or {}
-            config["token"] = raw.get("token", config["token"])
+            # Only use YAML token if it's a real token (not the placeholder)
+            yaml_token = raw.get("token", "")
+            if yaml_token and "YOUR_TOKEN_HERE" not in yaml_token:
+                config["token"] = yaml_token
             config["actors"] = raw.get("actors", {})
         except Exception:
             pass
@@ -358,3 +361,89 @@ async def scrape_via_apify(
             raise RuntimeError("No Apify token configured")
         results = await run_apify_actor(platform, {"queries": search_terms}, token)
         return results
+
+
+# ── Company-Targeted LinkedIn Searches ─────────────────────────────────────
+# Companies that don't have public ATS APIs and need LinkedIn scraping.
+
+APIFY_TARGET_COMPANIES: list[str] = [
+    # Companies without public ATS APIs — need LinkedIn scraping
+    "Meta", "Uber", "DoorDash", "Adobe", "Cisco",
+    "ServiceNow", "PayPal", "Intuit", "Snap Inc", "TikTok",
+    "ByteDance", "IBM", "Oracle", "Accenture", "Walmart",
+    "Expedia", "eBay", "Mastercard", "Capital One", "Booking.com",
+    # Companies with empty/small ATS boards — supplement via LinkedIn
+    "Coinbase", "Rippling", "Dell Technologies", "Disney",
+    "LinkedIn",
+]
+
+APIFY_ROLE_QUERIES: list[str] = [
+    "Product Manager",
+    "Program Manager",
+    "Software Engineer",
+    "UX Designer",
+]
+
+
+def build_company_linkedin_urls(
+    companies: list[str],
+    roles: list[str],
+    location: str = "United States",
+) -> list[str]:
+    """Build LinkedIn search URLs for specific companies + roles.
+
+    Uses 'Company Product Manager' as the keyword to target jobs at that company.
+    """
+    from urllib.parse import quote_plus
+
+    urls = []
+    for company in companies:
+        for role in roles:
+            keyword = f"{company} {role}"
+            url = (
+                f"https://www.linkedin.com/jobs/search/"
+                f"?keywords={quote_plus(keyword)}"
+                f"&location={quote_plus(location)}"
+                f"&f_TPR=r604800"
+                f"&f_E=2%2C3%2C4"
+            )
+            urls.append(url)
+    return urls
+
+
+async def scrape_company_linkedin_jobs(
+    companies: list[str] | None = None,
+    roles: list[str] | None = None,
+    location: str = "United States",
+    max_results: int = 200,
+) -> list[dict]:
+    """Scrape LinkedIn for jobs at specific companies we can't reach via ATS APIs.
+
+    This targets companies like Meta, Uber, Adobe etc. that block direct API access.
+    Runs one Apify actor call with all company+role URL combinations.
+    """
+    config = load_apify_config()
+    token = config["token"]
+    if not token:
+        return []
+
+    target_companies = companies or APIFY_TARGET_COMPANIES
+    target_roles = roles or APIFY_ROLE_QUERIES
+    actor_id = config.get("actors", {}).get("linkedin", "bebity/linkedin-jobs-scraper")
+
+    urls = build_company_linkedin_urls(target_companies, target_roles, location)
+
+    input_data = {
+        "urls": urls,
+        "scrapeCompany": False,
+        "count": max_results,
+    }
+
+    try:
+        results = await run_apify_actor(actor_id, input_data, token, timeout_secs=600)
+        jobs = [flatten_linkedin_job(item) for item in results]
+        return [j for j in jobs if is_us_location(j.get("location", ""))]
+    except Exception as e:
+        import logging
+        logging.getLogger("jobpilot").error(f"Company LinkedIn scrape failed: {e}")
+        return []

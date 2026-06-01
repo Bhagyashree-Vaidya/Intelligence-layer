@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { getJobs, rescoreAll, startScrape, getScrapeStatus, generateMessage, type Job, type JobsResponse } from "@/lib/api";
+import { getJobs, rescoreAll, startScrape, getScrapeStatus, generateMessage, trackApplication, getApplications, type Job, type JobsResponse } from "@/lib/api";
 import { MatchRing } from "@/components/MatchRing";
 
 export default function Dashboard() {
@@ -10,6 +10,8 @@ export default function Dashboard() {
   const [page, setPage] = useState(1);
   const [scraping, setScraping] = useState(false);
   const [scrapeMsg, setScrapeMsg] = useState("");
+  const [appliedIds, setAppliedIds] = useState<Set<number>>(new Set());
+  const [appStats, setAppStats] = useState<{ total: number; sent: number; interviews: number; offers: number }>({ total: 0, sent: 0, interviews: 0, offers: 0 });
 
   const fetchJobs = useCallback(async () => {
     const params: Record<string, string> = { page: String(page) };
@@ -19,6 +21,14 @@ export default function Dashboard() {
   }, [page, filters]);
 
   useEffect(() => { fetchJobs(); }, [fetchJobs]);
+
+  // Fetch applied IDs + stats on mount
+  useEffect(() => {
+    getApplications().then((res) => {
+      setAppliedIds(new Set(res.applications.map((a: any) => a.job_id)));
+      setAppStats(res.stats);
+    }).catch(() => {});
+  }, []);
 
   // Poll scrape status while running
   useEffect(() => {
@@ -68,7 +78,20 @@ export default function Dashboard() {
             <span style={{ color: "var(--jp-dim)", fontStyle: "italic" }}>open roles</span>
           </h1>
         </div>
-        <div style={{ display: "flex", gap: 10 }}>
+        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+          {/* Application counter */}
+          <div style={{ display: "flex", gap: 12, marginRight: 12 }}>
+            {[
+              ["Applied", appStats.sent, "var(--jp-primary)"],
+              ["Interviews", appStats.interviews, "var(--jp-emerald)"],
+              ["Offers", appStats.offers, "#27ae60"],
+            ].map(([label, val, color]) => (
+              <div key={String(label)} style={{ textAlign: "center", padding: "4px 10px" }}>
+                <div style={{ fontSize: 20, fontWeight: 600, fontFamily: "var(--jp-mono)", color: String(color) }}>{val}</div>
+                <div style={{ fontSize: 10, color: "var(--jp-dim)", textTransform: "uppercase", letterSpacing: "0.5px" }}>{label}</div>
+              </div>
+            ))}
+          </div>
           <button className="jp-btn sm ghost" onClick={handleRescore}>Rescore</button>
           <button className="jp-btn primary" onClick={handleScrape} disabled={scraping}>
             {scraping ? scrapeMsg : "Fetch new jobs"}
@@ -136,7 +159,21 @@ export default function Dashboard() {
       {/* Job list */}
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
         {data?.jobs.map((job) => (
-          <JobCard key={job.id} job={job} />
+          <JobCard
+            key={job.id}
+            job={job}
+            isApplied={appliedIds.has(job.id)}
+            onApply={async () => {
+              await trackApplication(job.id, "applied");
+              setAppliedIds((prev) => new Set([...prev, job.id]));
+              setAppStats((s) => ({ ...s, total: s.total + 1, sent: s.sent + 1 }));
+            }}
+            onSave={async () => {
+              await trackApplication(job.id, "saved");
+              setAppliedIds((prev) => new Set([...prev, job.id]));
+              setAppStats((s) => ({ ...s, total: s.total + 1 }));
+            }}
+          />
         ))}
         {data && data.jobs.length === 0 && (
           <div className="jp-card" style={{ padding: 48, textAlign: "center", color: "var(--jp-dim)" }}>
@@ -159,18 +196,58 @@ export default function Dashboard() {
   );
 }
 
-function JobCard({ job }: { job: Job }) {
+function JobCard({ job, isApplied, onApply, onSave }: {
+  job: Job;
+  isApplied: boolean;
+  onApply: () => Promise<void>;
+  onSave: () => Promise<void>;
+}) {
+  const [applying, setApplying] = useState(false);
+
+  const handleApply = async () => {
+    if (isApplied) return;
+    setApplying(true);
+    try {
+      // Open the job URL in a new tab (Chrome extension will auto-fill)
+      window.open(job.url, "_blank");
+      // Track the application
+      await onApply();
+    } catch (e) {
+      console.error("Failed to track application:", e);
+    }
+    setApplying(false);
+  };
+
+  const handleSave = async () => {
+    if (isApplied) return;
+    try {
+      await onSave();
+    } catch (e) {
+      console.error("Failed to save job:", e);
+    }
+  };
+
   return (
-    <div className="jp-card" style={{ padding: "18px 22px", display: "flex", gap: 18, alignItems: "center" }}>
+    <div className="jp-card" style={{
+      padding: "18px 22px", display: "flex", gap: 18, alignItems: "center",
+      borderLeft: isApplied ? "3px solid var(--jp-primary)" : "3px solid transparent",
+    }}>
       <MatchRing score={job.relevancy_score || 0} color={job.color} />
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
           <strong style={{ fontSize: 16, color: "var(--jp-ink)" }}>{job.title}</strong>
+          {isApplied && (
+            <span className="jp-badge" style={{ fontSize: 12, padding: "4px 10px", background: "var(--jp-primary)", color: "#fff", borderRadius: 6 }}>
+              Applied
+            </span>
+          )}
           {job.freshness && (
             <span
               className="jp-badge"
               style={{
-                fontSize: 11,
+                fontSize: 12,
+                padding: "4px 10px",
+                borderRadius: 6,
                 background: job.freshness.badge_color === "red" ? "var(--jp-rose-50)" :
                   job.freshness.badge_color === "orange" ? "var(--jp-amber-50)" :
                   "var(--neu-bg-2)",
@@ -189,16 +266,25 @@ function JobCard({ job }: { job: Job }) {
         {job.keywords_list && job.keywords_list.length > 0 && (
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
             {job.keywords_list.slice(0, 6).map((kw) => (
-              <span key={kw} className="jp-badge" style={{ fontSize: 11 }}>{kw}</span>
+              <span key={kw} className="jp-badge" style={{ fontSize: 12, padding: "3px 8px" }}>{kw}</span>
             ))}
           </div>
         )}
       </div>
       <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+        {!isApplied && (
+          <button className="jp-btn sm ghost" onClick={handleSave} title="Save for later">
+            Save
+          </button>
+        )}
         {job.url && (
-          <a href={job.url} target="_blank" rel="noopener noreferrer" className="jp-btn sm ghost">
-            Apply
-          </a>
+          <button
+            className={`jp-btn sm ${isApplied ? "ghost" : "primary"}`}
+            onClick={isApplied ? () => window.open(job.url, "_blank") : handleApply}
+            disabled={applying}
+          >
+            {applying ? "..." : isApplied ? "View" : "Apply"}
+          </button>
         )}
       </div>
     </div>

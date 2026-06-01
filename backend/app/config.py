@@ -1,6 +1,9 @@
-"""Centralized configuration loaded from environment variables."""
+"""Centralized configuration loaded from environment variables.
 
-import os
+All new service keys default to empty string — features gracefully
+degrade when keys aren't set. No crashes, just skipped functionality.
+"""
+
 from functools import lru_cache
 
 from pydantic_settings import BaseSettings
@@ -15,11 +18,19 @@ class Settings(BaseSettings):
     openai_api_key: str = ""
     claude_api: str = ""
 
-    # --- Apify ---
+    # --- Scraping ---
     apify_token: str = ""
+    firecrawl_api_key: str = ""
+
+    # --- Browser Automation ---
+    browserbase_api_key: str = ""
+    browserbase_project_id: str = ""
+
+    # --- Queue ---
+    redis_url: str = ""  # rediss://default:xxx@xxx.upstash.io:6379
 
     # --- App ---
-    frontend_url: str = "https://shreevaidya.com"
+    frontend_url: str = "https://hire.shreevaidya.com"
     backend_url: str = "https://jobs.shreevaidya.com"
     environment: str = "production"  # development | production
     log_level: str = "INFO"
@@ -27,6 +38,18 @@ class Settings(BaseSettings):
 
     # --- Resume Storage ---
     resume_upload_dir: str = "/tmp/resumes"
+
+    # --- Auto-Apply ---
+    auto_apply_enabled: bool = False
+    auto_apply_max_per_run: int = 30
+    auto_apply_min_score: int = 0
+    auto_apply_exclude_companies: str = ""  # comma-separated
+
+    # --- Alerts ---
+    alert_email: str = "bhagyashreevaidya08@gmail.com"
+    smtp_password: str = ""        # Gmail App Password (16-char)
+    smtp_host: str = "smtp.gmail.com"
+    smtp_port: int = 587
 
     class Config:
         env_file = ".env"

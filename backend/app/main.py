@@ -1,7 +1,7 @@
-"""JobPilot API — FastAPI backend for Render deployment.
+"""JobPilot API — FastAPI backend on Fly.io.
 
 Pure JSON API. No templates, no static files. The frontend is a
-separate Next.js app on Vercel at shreevaidya.com.
+separate Next.js app on Vercel.
 """
 
 from contextlib import asynccontextmanager
@@ -11,7 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings
 from app.logger import log
-from app.routes import health, profile, jobs, scraper, applications, answers
+from app.routes import health, profile, jobs, scraper, applications, answers, signals, auto_apply
 
 
 @asynccontextmanager
@@ -31,11 +31,15 @@ app = FastAPI(
 
 settings = get_settings()
 origins = [
-    settings.frontend_url,              # https://shreevaidya.com
-    "http://localhost:3000",             # local frontend dev
+    settings.frontend_url,                          # https://shreevaidya.com
+    "https://intelligence-layer-two.vercel.app",    # Vercel preview/fallback URL
+    "http://localhost:3000",                         # local frontend dev
     "http://127.0.0.1:3000",
-    "chrome-extension://*",             # Chrome extension
+    "chrome-extension://*",                          # Chrome extension
 ]
+# Also allow requests via the custom domain
+if settings.backend_url:
+    origins.append(settings.backend_url)
 
 app.add_middleware(
     CORSMiddleware,
@@ -53,6 +57,8 @@ app.include_router(jobs.router)
 app.include_router(scraper.router)
 app.include_router(applications.router)
 app.include_router(answers.router)
+app.include_router(signals.router)
+app.include_router(auto_apply.router)
 
 
 @app.get("/")

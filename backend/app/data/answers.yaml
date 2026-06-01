@@ -169,6 +169,69 @@
 #     and I want to contribute to building AI that is safe, beneficial, and
 #     well-understood."
 
+# ── Company-Specific Questions ─────────────────────────────────────────────
+# Format: "question text containing company name"
+# The extension matches against the question label on the ATS page.
+
+"have you ever worked for amazon":
+  answer: "No"
+
+"have you ever worked for google":
+  answer: "No"
+
+"have you ever worked for meta":
+  answer: "No"
+
+"have you ever worked for apple":
+  answer: "No"
+
+"have you ever worked for microsoft":
+  answer: "No"
+
+"have you previously been employed by":
+  answer: "No"
+
+# ── Government / Clearance ─────────────────────────────────────────────────
+
+"security clearance":
+  answer: "No"
+
+"do you hold an active security clearance":
+  answer: "No"
+
+"government clearance":
+  answer: "No"
+
+# ── Remote / Location ──────────────────────────────────────────────────────
+
+"are you currently located in":
+  answer: "[skip]"
+  # Varies by job — review manually
+
+"do you currently reside in the united states":
+  answer: "Yes"
+
+"current location":
+  answer: "Seattle, WA"
+
+"preferred work arrangement":
+  answer: "Remote"
+
+"are you open to hybrid":
+  answer: "Yes"
+
+# ── Learned Answers ────────────────────────────────────────────────────────
+# Answers below this line are auto-appended by the extension when you
+# manually fill a question for the first time. The system learns from
+# your manual inputs and auto-fills them next time.
+#
+# Format (auto-generated):
+#   "exact question text from ats":
+#     answer: "your manual input"
+#     source: "learned"
+#     company: "company where first encountered"
+#     date: "2025-05-20"
+
 # ── Catch-All for Unknown Questions ─────────────────────────────────────────
 # If no pattern matches, the answer engine tries to generate an answer.
 # If it can't, the field is left blank for you to fill manually.

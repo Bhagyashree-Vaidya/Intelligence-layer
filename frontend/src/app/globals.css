@@ -88,6 +88,8 @@
   font-feature-settings: 'ss01','cv11';
   -webkit-font-smoothing: antialiased;
   letter-spacing: -0.005em;
+  height: 100vh;
+  overflow: hidden;
 }
 .jp-app *, .jp-app *::before, .jp-app *::after { box-sizing: border-box; }
 
@@ -126,7 +128,9 @@
 .jp-shell {
   display: grid;
   grid-template-columns: 258px 1fr;
-  height: 100%;
+  grid-template-rows: 100vh;
+  height: 100vh;
+  overflow: hidden;
 }
 
 /* ── sidebar (dark neumorphic) ─────────────────────────────────────────── */
@@ -232,7 +236,9 @@
 
 /* ── main area ── */
 .jp-main {
-  overflow: hidden;
+  overflow-y: auto;
+  overflow-x: hidden;
+  min-height: 0;        /* override grid min-height:auto so overflow works */
   display: flex;
   flex-direction: column;
   background: var(--neu-bg);
