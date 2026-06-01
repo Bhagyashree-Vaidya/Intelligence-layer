@@ -265,6 +265,36 @@ async def get_job(job_id: int) -> dict | None:
 
 # ── Applications ─────────────────────────────────────────────────────────────
 
+async def add_application_event(
+    app_id: int,
+    to_status: str,
+    from_status: str | None = None,
+    channel: str = "",
+    notes: str = "",
+) -> int:
+    """Append an immutable event to an application's timeline.
+
+    This is the heart of the feedback loop: every status transition is recorded
+    as its own timestamped row in application_events instead of overwriting
+    applications.status. Makes Offer Rate, Interview Rate, and time-to-callback
+    computable. Best-effort — never breaks the caller if the insert fails.
+    """
+    try:
+        db = get_db()
+        resp = db.table("application_events").insert({
+            "app_id": app_id,
+            "from_status": from_status,
+            "to_status": to_status,
+            "channel": channel,
+            "notes": notes,
+            "occurred_at": datetime.now(timezone.utc).isoformat(),
+        }).execute()
+        return resp.data[0]["id"] if resp.data else 0
+    except Exception as e:
+        log.error(f"add_application_event failed for app {app_id}: {e}")
+        return 0
+
+
 async def save_application(job_id: int, resume_id: int | None, status: str = "saved") -> int:
     db = get_db()
     resp = db.table("applications").insert({
@@ -273,12 +303,22 @@ async def save_application(job_id: int, resume_id: int | None, status: str = "sa
         "status": status,
         "applied_at": datetime.now(timezone.utc).isoformat(),
     }).execute()
-    return resp.data[0]["id"] if resp.data else 0
+    app_id = resp.data[0]["id"] if resp.data else 0
+    # Record the first event in the timeline (from_status NULL = creation).
+    if app_id:
+        await add_application_event(app_id, to_status=status, from_status=None)
+    return app_id
 
 
 async def update_application_status(app_id: int, status: str):
     db = get_db()
+    # Read the current status first so we can record the transition (from → to).
+    prev = db.table("applications").select("status").eq("id", app_id).execute()
+    from_status = prev.data[0]["status"] if prev.data else None
     db.table("applications").update({"status": status}).eq("id", app_id).execute()
+    # Append to the timeline only if the status actually changed.
+    if from_status != status:
+        await add_application_event(app_id, to_status=status, from_status=from_status)
 
 
 async def get_applications() -> list[dict]:
@@ -353,6 +393,55 @@ async def get_application_stats() -> dict:
             "offer": offers,
             "rejected": status_counts.get("rejected", 0),
         },
+    }
+
+
+async def get_cios_metrics() -> dict:
+    """North Star funnel from the event timeline (CIOS).
+
+    Unlike get_application_stats (which counts CURRENT status only and so loses
+    history when an app moves on), this counts whether an application EVER
+    reached each stage — the correct basis for conversion rates.
+
+    Optimization hierarchy (per CIOS spec):
+      P1 Offer Rate          = offers / applications_sent
+      P2 Interview Rate      = interviews / applications_sent
+    """
+    db = get_db()
+
+    # applications "sent" = ever reached 'applied' or beyond (exclude pure 'saved')
+    apps_resp = db.table("applications").select("id, status").execute()
+    apps = apps_resp.data or []
+    sent_ids = {a["id"] for a in apps if a["status"] != "saved"}
+    sent = len(sent_ids)
+
+    # For each app, the set of statuses it has EVER had (from the timeline).
+    ev_resp = db.table("application_events").select("app_id, to_status").execute()
+    reached: dict[str, set[int]] = {}
+    for e in ev_resp.data or []:
+        reached.setdefault(e["to_status"], set()).add(e["app_id"])
+
+    def ever(*statuses: str) -> int:
+        s: set[int] = set()
+        for st in statuses:
+            s |= reached.get(st, set())
+        return len(s & sent_ids) if sent_ids else 0
+
+    interviews = ever("interview", "offer")   # offer implies interview happened
+    offers = ever("offer")
+
+    def rate(n: int) -> float:
+        return round(100.0 * n / sent, 1) if sent else 0.0
+
+    return {
+        "applications_sent": sent,
+        "interviews": interviews,
+        "offers": offers,
+        "interview_rate": rate(interviews),   # P2
+        "offer_rate": rate(offers),           # P1 — North Star
+        "responses": ever("screen", "interview", "offer"),
+        "response_rate": rate(ever("screen", "interview", "offer")),
+        "rejections": ever("rejected"),
     }
 
 
