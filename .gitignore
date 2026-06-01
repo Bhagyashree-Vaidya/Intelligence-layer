@@ -48,3 +48,8 @@ Thumbs.db
 .env.vercel
 !.env.example
 .vercel
+
+# ─── Claude Code tooling (not app code) ──────────────
+.agents/
+skills-lock.json
+*.tsbuildinfo
