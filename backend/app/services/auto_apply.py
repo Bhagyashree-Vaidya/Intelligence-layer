@@ -517,6 +517,40 @@ async def run_auto_apply(
     """
     from app import database as db
 
+    # ──────────────────────────────────────────────────────────────────────────
+    # DISABLED (2026-06-02): API-based submission does not work.
+    # The Greenhouse/Lever/Ashby "apply" endpoints are READ-ONLY for the public —
+    # submitting an application requires the employer's PRIVATE API key, which we
+    # will never have. Every real submission returned HTTP 401 (29/29 failures in
+    # auto_apply_log). This is architecturally impossible to fix via API.
+    #
+    # The replacement is "Night Shift" (browser automation that fills the real web
+    # form like a human). Until that ships, we hard-stop the live submit path so it
+    # stops producing 100% failures on every cron run.
+    #
+    # dry_run is intentionally LEFT WORKING: it is pure candidate discovery (no
+    # submission) and Night Shift reuses it to pick eligible jobs.
+    # To re-enable the old behavior, delete this block.
+    # ──────────────────────────────────────────────────────────────────────────
+    if not dry_run:
+        log.warning(
+            "run_auto_apply: live API submission is disabled (ATS APIs are "
+            "read-only → always 401). Use Night Shift (browser automation) instead. "
+            "Returning without submitting."
+        )
+        return {
+            "success": False,
+            "disabled": True,
+            "reason": "api_submit_unsupported",
+            "message": (
+                "API-based auto-apply is disabled. ATS public APIs reject "
+                "submissions (401). Night Shift (browser automation) is the "
+                "replacement. Run with dry_run=True to preview candidates."
+            ),
+            "applied": 0,
+            "skipped": 0,
+        }
+
     settings = get_settings()
     allowed_roles = set(enabled_roles or DEFAULT_ENABLED_ROLES)
     exclude = set(c.strip().lower() for c in (exclude_companies or []) if c.strip())
