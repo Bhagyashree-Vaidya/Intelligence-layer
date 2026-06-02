@@ -590,3 +590,95 @@ async def rescore_all_jobs(profile: dict, only_unscored: bool = False,
 
     log.info(f"Rescore complete: {total} jobs (only_unscored={only_unscored})")
     return total
+
+
+# ── Night Shift ───────────────────────────────────────────────────────────────
+
+async def get_night_shift_settings() -> dict:
+    """Read the Night Shift toggle + cap (single row, id=1). OFF by default."""
+    db = get_db()
+    resp = db.table("night_shift_settings").select("*").eq("id", 1).execute()
+    if resp.data:
+        return resp.data[0]
+    return {
+        "enabled": False, "max_per_night": 20, "min_fit_score": 0,
+        "enabled_roles": "pm,tpm,product",
+    }
+
+
+async def update_night_shift_settings(data: dict) -> dict:
+    db = get_db()
+    update = {}
+    for key in ("enabled", "max_per_night", "min_fit_score", "enabled_roles"):
+        if key in data:
+            update[key] = data[key]
+    update["updated_at"] = datetime.now(timezone.utc).isoformat()
+    db.table("night_shift_settings").upsert({"id": 1, **update}).execute()
+    return await get_night_shift_settings()
+
+
+async def get_queued_job_ids() -> set[int]:
+    """Job IDs already in the Night Shift queue that are still open
+    (queued/filled) — so we never double-queue the same job."""
+    db = get_db()
+    resp = (
+        db.table("night_shift_queue")
+        .select("job_id")
+        .in_("status", ["queued", "filled"])
+        .execute()
+    )
+    return {r["job_id"] for r in resp.data or [] if r.get("job_id")}
+
+
+async def enqueue_night_shift(item: dict) -> int:
+    """Add one job to the Night Shift review queue. Best-effort; the unique
+    partial index (job_id where status in queued/filled) prevents duplicates."""
+    db = get_db()
+    try:
+        resp = db.table("night_shift_queue").insert({
+            "job_id": item["job_id"],
+            "company": item.get("company", ""),
+            "title": item.get("title", ""),
+            "url": item.get("url", ""),
+            "role": item.get("role", ""),
+            "resume_id": item.get("resume_id"),
+            "tier": item.get("tier", "tier_2"),
+            "status": "queued",
+            "queued_at": datetime.now(timezone.utc).isoformat(),
+        }).execute()
+        return resp.data[0]["id"] if resp.data else 0
+    except Exception as e:
+        # Duplicate (already queued) or other — log and skip, never crash the run.
+        log.warning(f"enqueue_night_shift skip job {item.get('job_id')}: {e}")
+        return 0
+
+
+async def get_night_shift_queue(status: str | None = None, limit: int = 100) -> list[dict]:
+    """Read the review inbox, optionally filtered by status, with job details."""
+    db = get_db()
+    q = (
+        db.table("night_shift_queue")
+        .select("*, jobs(title, company, url, ai_overall_fit)")
+        .order("queued_at", desc=True)
+        .limit(limit)
+    )
+    if status:
+        q = q.eq("status", status)
+    resp = q.execute()
+    rows = []
+    for r in resp.data or []:
+        job = r.pop("jobs", {}) or {}
+        rows.append({**r, **job})
+    return rows
+
+
+async def update_night_shift_item(item_id: int, **fields) -> None:
+    """Update a queue item's status / error / timestamps."""
+    db = get_db()
+    allowed = {
+        "status", "error_message", "fill_screenshot",
+        "filled_at", "reviewed_at", "resume_id",
+    }
+    update = {k: v for k, v in fields.items() if k in allowed}
+    if update:
+        db.table("night_shift_queue").update(update).eq("id", item_id).execute()
