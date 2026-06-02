@@ -62,11 +62,15 @@ async def get_job(job_id: int):
 
 
 @router.post("/rescore")
-async def rescore_all():
-    """Rescore every job against the current profile."""
+async def rescore_all(only_unscored: bool = Query(False), max_batches: int | None = Query(None)):
+    """Rescore jobs against the current profile.
+
+    only_unscored: only score jobs with relevancy_score 0/NULL (backfill/incremental).
+    max_batches: cap work at N×1000 rows per call (avoids HTTP timeout on big backfills).
+    """
     profile = await db.get_profile()
-    count = await db.rescore_all_jobs(profile)
-    return {"ok": True, "rescored": count}
+    count = await db.rescore_all_jobs(profile, only_unscored=only_unscored, max_batches=max_batches)
+    return {"ok": True, "rescored": count, "only_unscored": only_unscored}
 
 
 @router.get("/jobs/{job_id}/recruiter")

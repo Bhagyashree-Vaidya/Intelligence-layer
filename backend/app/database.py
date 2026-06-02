@@ -533,19 +533,60 @@ async def update_auto_apply_settings(data: dict) -> dict:
     return await get_auto_apply_settings()
 
 
-async def rescore_all_jobs(profile: dict) -> int:
+async def rescore_all_jobs(profile: dict, only_unscored: bool = False,
+                           max_batches: int | None = None) -> int:
+    """Score jobs against the profile.
+
+    PostgREST caps a plain select at 1000 rows, so we MUST paginate or most
+    of the table never gets scored (jobs then sink to the bottom of the
+    relevancy-sorted UI and look 'missing').
+
+    Args:
+        only_unscored: if True, only score jobs with relevancy_score 0/NULL
+            (incremental — fast, for the scrape pipeline). Every scored job
+            gets at least the +3 location floor, so score==0 reliably means
+            'never scored'. If False, re-score everything (for profile changes).
+        max_batches: if set, stop after this many 1000-row batches (bounds the
+            work per call so a one-shot HTTP trigger can't time out).
+    """
     from app.services.relevancy_engine import score_job
 
     db = get_db()
-    resp = db.table("jobs").select("id, title, description, location, department").execute()
-    rows = resp.data or []
+    PAGE = 1000
+    total = 0
+    offset = 0
+    batches = 0
 
-    for row in rows:
-        result = score_job(row, profile)
-        db.table("jobs").update({
-            "relevancy_score": result["relevancy_score"],
-            "keywords_matched": json.dumps(result["keywords_matched"]),
-        }).eq("id", row["id"]).execute()
+    while True:
+        q = db.table("jobs").select("id, title, description, location, department")
+        if only_unscored:
+            # Scored rows leave this filter (score >= 3), so always read the
+            # first page of remaining unscored rows until none are left.
+            q = q.or_("relevancy_score.eq.0,relevancy_score.is.null").limit(PAGE)
+        else:
+            q = q.range(offset, offset + PAGE - 1)
 
-    log.info(f"Rescored {len(rows)} jobs")
-    return len(rows)
+        rows = q.execute().data or []
+        if not rows:
+            break
+
+        for row in rows:
+            result = score_job(row, profile)
+            db.table("jobs").update({
+                "relevancy_score": result["relevancy_score"],
+                "keywords_matched": json.dumps(result["keywords_matched"]),
+            }).eq("id", row["id"]).execute()
+
+        total += len(rows)
+        batches += 1
+        log.info(f"Rescored batch: {total} so far (only_unscored={only_unscored})")
+
+        if len(rows) < PAGE:
+            break
+        if max_batches is not None and batches >= max_batches:
+            break
+        if not only_unscored:
+            offset += PAGE
+
+    log.info(f"Rescore complete: {total} jobs (only_unscored={only_unscored})")
+    return total

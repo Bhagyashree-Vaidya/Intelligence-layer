@@ -227,11 +227,11 @@ async def start_full_scrape(body: dict | None = None):
                 errors.append(f"Apify: {e}")
                 log.error(f"Apify scrape error: {e}")
 
-            # 4. Rescore
+            # 4. Rescore (incremental — only newly scraped/unscored jobs)
             scrape_status["progress"] = "Scoring relevancy..."
             await _broadcast(scrape_status)
             profile = await db.get_profile()
-            await db.rescore_all_jobs(profile)
+            await db.rescore_all_jobs(profile, only_unscored=True)
 
             err_str = f" (errors: {'; '.join(errors)})" if errors else ""
             scrape_status["last_result"] = f"Done: {total_jobs} jobs scraped & scored{err_str}"

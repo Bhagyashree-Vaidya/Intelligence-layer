@@ -125,10 +125,10 @@ async def run_scrape_all(ctx: dict) -> dict:
         errors.append(f"Apify: {e}")
         log.error(f"Cron Apify error: {e}")
 
-    # 4. Rescore against profile
+    # 4. Rescore against profile (incremental — only newly scraped/unscored jobs)
     try:
         profile = await db.get_profile()
-        await db.rescore_all_jobs(profile)
+        await db.rescore_all_jobs(profile, only_unscored=True)
     except Exception as e:
         errors.append(f"Rescore: {e}")
 
