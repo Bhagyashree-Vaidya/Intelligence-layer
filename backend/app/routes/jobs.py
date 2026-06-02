@@ -6,6 +6,7 @@ from fastapi import APIRouter, HTTPException, Query
 
 from app import database as db
 from app.services import relevancy_engine
+from app.services.ai import orchestrator
 from app.logger import log
 
 router = APIRouter(prefix="/api", tags=["jobs"])
@@ -84,6 +85,43 @@ async def generate_message(job_id: int, body: dict | None = None):
         job["company"], job["title"], job.get("department", ""),
     )
     return {"message": message, "job": {"title": job["title"], "company": job["company"]}, **recruiter_urls}
+
+
+@router.post("/jobs/{job_id}/cover-letter")
+async def generate_cover_letter(job_id: int):
+    """Generate a tailored cover letter for a job. → OpenAI (Claude fallback)."""
+    job = await db.get_job(job_id)
+    if not job:
+        raise HTTPException(404, "Job not found")
+
+    profile = await db.get_profile()
+    if not profile:
+        raise HTTPException(400, "Profile not set up yet")
+
+    user_summary = (
+        f"{profile.get('first_name', '')} {profile.get('last_name', '')}, "
+        f"{profile.get('current_title', '')} at {profile.get('current_company', '')}. "
+        f"Experience: {profile.get('years_experience', 0)} years. "
+        f"Skills: {profile.get('skills', '')}. "
+        f"Education: {profile.get('education', '')}. "
+        f"Work auth: {profile.get('work_auth', '')} | Sponsorship: {profile.get('sponsorship', '')}."
+    )
+
+    try:
+        letter = await orchestrator.generate_cover_letter(
+            job_title=job.get("title", ""),
+            company=job.get("company", ""),
+            job_description=job.get("description", "") or "",
+            user_profile=user_summary,
+        )
+    except Exception as e:
+        log.error(f"Cover letter generation failed for job {job_id}: {e}")
+        raise HTTPException(502, "Cover letter generation failed — check AI keys")
+
+    return {
+        "cover_letter": letter,
+        "job": {"title": job.get("title", ""), "company": job.get("company", "")},
+    }
 
 
 @router.post("/jobs/fix-dates")

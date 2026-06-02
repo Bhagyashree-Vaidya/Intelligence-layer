@@ -7,6 +7,7 @@ import {
   triggerSignalScan,
   getContacts,
   generateOutreach,
+  batchGenerateOutreach,
   type Signal,
   type SignalStats,
   type Contact,
@@ -317,18 +318,23 @@ function SignalCard({ signal }: { signal: Signal }) {
 
 /* ── Contacts List ─────────────────────────────────────────────────────── */
 
+type FilterMode = "relevant" | "all" | "recruiters";
+
 function ContactsList() {
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
-  const [recruiterOnly, setRecruiterOnly] = useState(false);
+  const [filterMode, setFilterMode] = useState<FilterMode>("relevant");
   const [loading, setLoading] = useState(true);
+  const [generating, setGenerating] = useState(false);
+  const [genMsg, setGenMsg] = useState("");
 
   const fetch = useCallback(async () => {
     setLoading(true);
     try {
       const params: Record<string, string> = { page: String(page) };
-      if (recruiterOnly) params.recruiter_only = "true";
+      if (filterMode === "recruiters") params.recruiter_only = "true";
+      if (filterMode === "relevant") params.relevant_only = "true";
       const res = await getContacts(params);
       setContacts(res.contacts);
       setTotal(res.total);
@@ -336,22 +342,54 @@ function ContactsList() {
       /* empty */
     }
     setLoading(false);
-  }, [page, recruiterOnly]);
+  }, [page, filterMode]);
+
+  const setMode = (m: FilterMode) => { setFilterMode(m); setPage(1); };
+
+  const handleBatchGenerate = async () => {
+    setGenerating(true);
+    setGenMsg("Generating outreach messages...");
+    try {
+      const params: Record<string, any> = {};
+      if (filterMode === "recruiters") params.recruiter_only = true;
+      if (filterMode === "relevant") params.relevant_only = true;
+      const res = await batchGenerateOutreach(params);
+      setGenMsg(`Generated ${res.generated}/${res.total} messages (${res.failed} failed)`);
+      // Refresh contacts to show newly generated messages
+      fetch();
+      setTimeout(() => setGenMsg(""), 3000);
+    } catch (e: any) {
+      setGenMsg(`Error: ${e.message}`);
+    } finally {
+      setGenerating(false);
+    }
+  };
 
   useEffect(() => { fetch(); }, [fetch]);
 
   return (
     <>
-      <div style={{ marginBottom: 16, display: "flex", alignItems: "center", gap: 12 }}>
-        <div className="jp-seg">
-          <button className={!recruiterOnly ? "on" : ""} onClick={() => { setRecruiterOnly(false); setPage(1); }}>
-            All
-          </button>
-          <button className={recruiterOnly ? "on" : ""} onClick={() => { setRecruiterOnly(true); setPage(1); }}>
-            Recruiters
+      <div style={{ marginBottom: 16, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <div className="jp-seg">
+            <button className={filterMode === "relevant" ? "on" : ""} onClick={() => setMode("relevant")}>
+              Relevant US
+            </button>
+            <button className={filterMode === "all" ? "on" : ""} onClick={() => setMode("all")}>
+              All
+            </button>
+            <button className={filterMode === "recruiters" ? "on" : ""} onClick={() => setMode("recruiters")}>
+              Recruiters
+            </button>
+          </div>
+          <span style={{ fontSize: 13, color: "var(--jp-mute)" }}>{total} contacts</span>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          {genMsg && <span style={{ fontSize: 13, color: "var(--jp-dim)" }}>{genMsg}</span>}
+          <button className="jp-btn primary" onClick={handleBatchGenerate} disabled={generating || total === 0}>
+            {generating ? "Generating..." : "Generate All"}
           </button>
         </div>
-        <span style={{ fontSize: 13, color: "var(--jp-mute)" }}>{total} contacts</span>
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -400,39 +438,55 @@ function ContactCard({ contact }: { contact: Contact }) {
   };
 
   return (
-    <div className="jp-card" style={{ padding: "16px 20px", display: "flex", gap: 14, alignItems: "center" }}>
-      <div className="jp-co">{initials}</div>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 2 }}>
-          <strong style={{ fontSize: 15 }}>{contact.name}</strong>
-          {contact.is_recruiter && (
-            <span className="jp-chip violet" style={{ fontSize: 10, height: 20, padding: "0 8px" }}>Recruiter</span>
-          )}
-        </div>
-        <div style={{ fontSize: 13, color: "var(--jp-dim)" }}>
-          {contact.title}{contact.company && ` at ${contact.company}`}
-        </div>
-        <div style={{ display: "flex", gap: 10, marginTop: 4 }}>
-          {contact.latest_role_mentioned && (
-            <span className="jp-chip primary" style={{ fontSize: 10, height: 20, padding: "0 8px" }}>
-              {contact.latest_role_mentioned}
+    <div className="jp-card" style={{ padding: "16px 20px" }}>
+      <div style={{ display: "flex", gap: 14, alignItems: "flex-start" }}>
+        <div className="jp-co">{initials}</div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 2 }}>
+            <strong style={{ fontSize: 15 }}>{contact.name}</strong>
+            {contact.is_recruiter && (
+              <span className="jp-chip violet" style={{ fontSize: 10, height: 20, padding: "0 8px" }}>Recruiter</span>
+            )}
+          </div>
+          <div style={{ fontSize: 13, color: "var(--jp-dim)" }}>
+            {contact.title}{contact.company && ` at ${contact.company}`}
+          </div>
+          <div style={{ display: "flex", gap: 10, marginTop: 4 }}>
+            {contact.latest_role_mentioned && (
+              <span className="jp-chip primary" style={{ fontSize: 10, height: 20, padding: "0 8px" }}>
+                {contact.latest_role_mentioned}
+              </span>
+            )}
+            <span style={{ fontSize: 12, color: "var(--jp-mute)", fontFamily: "var(--jp-mono)" }}>
+              Seen {contact.interaction_count}x
             </span>
+          </div>
+
+          {/* Relevance reason */}
+          {contact.is_relevant && contact.relevance_reason && (
+            <div style={{ fontSize: 12, color: "var(--jp-emerald)", marginTop: 6 }}>
+              ✓ {contact.relevance_reason}
+            </div>
           )}
-          <span style={{ fontSize: 12, color: "var(--jp-mute)", fontFamily: "var(--jp-mono)" }}>
-            Seen {contact.interaction_count}x
-          </span>
+
+          {/* Outreach message */}
+          {contact.outreach_message && (
+            <div className="neu-well" style={{ marginTop: 12, fontSize: 13, lineHeight: 1.6, whiteSpace: "pre-wrap" }}>
+              {contact.outreach_message}
+            </div>
+          )}
         </div>
-      </div>
-      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-        <span className={`jp-chip ${statusColor[contact.outreach_status] || "ghost"}`}
-          style={{ fontSize: 11, height: 24 }}>
-          {contact.outreach_status}
-        </span>
-        {contact.linkedin_url && (
-          <a href={contact.linkedin_url} target="_blank" rel="noopener noreferrer" className="jp-btn sm ghost">
-            LinkedIn
-          </a>
-        )}
+        <div style={{ display: "flex", gap: 8, alignItems: "center", flexShrink: 0 }}>
+          <span className={`jp-chip ${statusColor[contact.outreach_status] || "ghost"}`}
+            style={{ fontSize: 11, height: 24 }}>
+            {contact.outreach_status}
+          </span>
+          {contact.linkedin_url && (
+            <a href={contact.linkedin_url} target="_blank" rel="noopener noreferrer" className="jp-btn sm ghost">
+              LinkedIn
+            </a>
+          )}
+        </div>
       </div>
     </div>
   );

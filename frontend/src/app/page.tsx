@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { getJobs, rescoreAll, startScrape, getScrapeStatus, generateMessage, trackApplication, getApplications, type Job, type JobsResponse } from "@/lib/api";
+import { getJobs, rescoreAll, startScrape, getScrapeStatus, generateMessage, generateCoverLetter, trackApplication, getApplications, type Job, type JobsResponse } from "@/lib/api";
 import { MatchRing } from "@/components/MatchRing";
 
 export default function Dashboard() {
@@ -203,6 +203,28 @@ function JobCard({ job, isApplied, onApply, onSave }: {
   onSave: () => Promise<void>;
 }) {
   const [applying, setApplying] = useState(false);
+  const [coverLetter, setCoverLetter] = useState("");
+  const [clLoading, setClLoading] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const handleCoverLetter = async () => {
+    setClLoading(true);
+    try {
+      const res = await generateCoverLetter(job.id);
+      setCoverLetter(res.cover_letter);
+    } catch {
+      setCoverLetter("Failed to generate — is your profile set up?");
+    }
+    setClLoading(false);
+  };
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(coverLetter);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch { /* ignore */ }
+  };
 
   const handleApply = async () => {
     if (isApplied) return;
@@ -229,9 +251,10 @@ function JobCard({ job, isApplied, onApply, onSave }: {
 
   return (
     <div className="jp-card" style={{
-      padding: "18px 22px", display: "flex", gap: 18, alignItems: "center",
+      padding: "18px 22px",
       borderLeft: isApplied ? "3px solid var(--jp-primary)" : "3px solid transparent",
     }}>
+    <div style={{ display: "flex", gap: 18, alignItems: "center" }}>
       <MatchRing score={job.relevancy_score || 0} color={job.color} />
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
@@ -277,6 +300,9 @@ function JobCard({ job, isApplied, onApply, onSave }: {
             Save
           </button>
         )}
+        <button className="jp-btn sm ghost" onClick={handleCoverLetter} disabled={clLoading} title="Generate a tailored cover letter">
+          {clLoading ? "..." : "Cover Letter"}
+        </button>
         {job.url && (
           <button
             className={`jp-btn sm ${isApplied ? "ghost" : "primary"}`}
@@ -287,6 +313,23 @@ function JobCard({ job, isApplied, onApply, onSave }: {
           </button>
         )}
       </div>
+    </div>
+
+    {/* Cover letter */}
+    {coverLetter && (
+      <div style={{ marginTop: 14 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+          <span className="jp-eyebrow">Cover letter</span>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button className="jp-btn sm ghost" onClick={handleCopy}>{copied ? "Copied ✓" : "Copy"}</button>
+            <button className="jp-btn sm ghost" onClick={() => setCoverLetter("")}>Dismiss</button>
+          </div>
+        </div>
+        <div className="neu-well" style={{ fontSize: 14, lineHeight: 1.7, whiteSpace: "pre-wrap" }}>
+          {coverLetter}
+        </div>
+      </div>
+    )}
     </div>
   );
 }

@@ -65,6 +65,13 @@ export function generateMessage(jobId: number, contactName?: string) {
   });
 }
 
+export function generateCoverLetter(jobId: number) {
+  return request<{ cover_letter: string; job: { title: string; company: string } }>(
+    `/api/jobs/${jobId}/cover-letter`,
+    { method: "POST" },
+  );
+}
+
 // ── Scraper ────────────────────────────────────────────────────────────────
 export function startScrape(type: "all" | "" | "bigtech" | "apify", body?: Record<string, string>) {
   const path = type ? `/api/scrape/${type}` : "/api/scrape";
@@ -187,6 +194,9 @@ export interface Contact {
   interaction_count: number;
   latest_role_mentioned: string;
   outreach_status: string;
+  outreach_message?: string;
+  is_relevant?: boolean;
+  relevance_reason?: string;
 }
 
 export function getSignals(params: Record<string, string> = {}): Promise<SignalsResponse> {
@@ -217,4 +227,26 @@ export function generateOutreach(data: {
     method: "POST",
     body: JSON.stringify(data),
   });
+}
+
+export interface OutreachResult {
+  contact_id: number;
+  name: string;
+  title: string;
+  company: string;
+  linkedin_url: string;
+  is_recruiter: boolean;
+  message: string;
+  status: string;
+  error?: string;
+}
+
+export function batchGenerateOutreach(params: Record<string, any> = {}): Promise<{
+  total: number;
+  generated: number;
+  failed: number;
+  messages: OutreachResult[];
+}> {
+  const qs = new URLSearchParams(Object.entries(params).map(([k, v]) => [k, String(v)])).toString();
+  return request(`/api/signals/outreach/batch${qs ? `?${qs}` : ""}`, { method: "POST" });
 }

@@ -10,7 +10,11 @@ from typing import Any
 from app.database import get_db
 from app.logger import log
 from app.services.ai import orchestrator
+from app.services.role_classifier import classify_role
 from app.services.scrapers.linkedin_posts import has_hiring_signal, is_likely_us
+
+# Role categories relevant to the user's search (product / program / SWE)
+_RELEVANT_ROLE_CATEGORIES = {"pm", "tpm", "product", "swe"}
 
 
 # ── Classification pipeline ──────────────────────────────────────────────
@@ -56,9 +60,15 @@ async def classify_and_store(posts: list[dict]) -> dict[str, Any]:
             await _store_signal(post, classification)
             stats["stored"] += 1
 
-            # If high-confidence, also create/update contact
+            # If high-confidence, also create/update contact — but only when
+            # it's a relevant US individual (product/program/SWE), not a
+            # company page or off-target role.
             if classification.get("hiring_intent", 0) >= 70:
-                await _upsert_contact(post, classification)
+                relevant, reason = _contact_relevance(post, classification)
+                if relevant:
+                    await _upsert_contact(post, classification, reason)
+                else:
+                    log.info(f"Contact skipped (not relevant): {reason}")
 
         except Exception as e:
             log.error(f"Signal classification error: {e}")
@@ -117,8 +127,40 @@ async def _store_signal(post: dict, classification: dict) -> None:
     }).execute()
 
 
-async def _upsert_contact(post: dict, classification: dict) -> None:
-    """Create or update a contact from a high-intent hiring post."""
+def _contact_relevance(post: dict, classification: dict) -> tuple[bool, str]:
+    """Decide whether a hiring post should create a contact.
+
+    A contact must be: (1) a real individual (not a company page),
+    (2) a US-based role, and (3) a relevant role category (product/program/SWE).
+    Returns (is_relevant, reason).
+    """
+    # 1. Must be an individual, not a company LinkedIn page
+    author_type = (post.get("author_type", "") or "").lower()
+    author_title = (post.get("author_title", "") or "").lower()
+    if author_type == "company" or "followers" in author_title:
+        return False, "company page, not an individual"
+
+    # 2. Must be US-based (hardened location check)
+    if not is_likely_us(post):
+        return False, "non-US role"
+
+    # 3. Must be a relevant role (product / program / SWE)
+    role_text = " ".join([
+        classification.get("role_mentioned", "") or "",
+        post.get("job_title", "") or "",
+        post.get("article_title", "") or "",
+    ]).strip()
+    category = classify_role(role_text)
+    if category not in _RELEVANT_ROLE_CATEGORIES:
+        return False, f"off-target role ({role_text[:60] or 'unknown'})"
+
+    company = post.get("author_company", "") or classification.get("company_mentioned", "")
+    reason = f"{category.upper()} role at {company or 'US company'}".strip()
+    return True, reason
+
+
+async def _upsert_contact(post: dict, classification: dict, relevance_reason: str = "") -> None:
+    """Create or update a contact from a high-intent, relevant hiring post."""
     db = get_db()
     author_url = post.get("author_url", "")
     if not author_url:
@@ -143,6 +185,8 @@ async def _upsert_contact(post: dict, classification: dict) -> None:
             "interaction_count": (contact.get("interaction_count", 0) or 0) + 1,
             "latest_post_url": post.get("post_url", ""),
             "latest_role_mentioned": classification.get("role_mentioned", ""),
+            "is_relevant": True,
+            "relevance_reason": relevance_reason,
         }).eq("id", contact["id"]).execute()
     else:
         # Create new contact
@@ -159,6 +203,8 @@ async def _upsert_contact(post: dict, classification: dict) -> None:
             "latest_post_url": post.get("post_url", ""),
             "latest_role_mentioned": classification.get("role_mentioned", ""),
             "outreach_status": "none",
+            "is_relevant": True,
+            "relevance_reason": relevance_reason,
         }).execute()
 
 
@@ -192,12 +238,15 @@ async def get_contacts(
     limit: int = 50,
     offset: int = 0,
     recruiter_only: bool = False,
+    relevant_only: bool = False,
 ) -> tuple[list[dict], int]:
     """Fetch networking contacts, sorted by recency."""
     db = get_db()
     q = db.table("contacts").select("*", count="exact")
     if recruiter_only:
         q = q.eq("is_recruiter", True)
+    if relevant_only:
+        q = q.eq("is_relevant", True)
 
     q = q.order("last_seen_at", desc=True)
     q = q.range(offset, offset + limit - 1)

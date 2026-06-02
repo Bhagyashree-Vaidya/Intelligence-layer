@@ -21,18 +21,39 @@ from app.logger import log
 
 LINKEDIN_POSTS_ACTOR = "harvestapi~linkedin-post-search"
 
-# Search queries targeting REAL people posting about hiring
-# (not job board spam — those get filtered by the AI classifier)
-# US-focused queries — LinkedIn scopes results by location terms in query
+# Hiring-intent search queries. Company targeting (TARGET_COMPANIES) does the
+# heavy lifting for relevance, so these stay role-focused and broad.
 SEARCH_QUERIES = [
-    '"we\'re hiring" "product manager" United States',
-    '"join my team" product manager remote OR hybrid',
-    '"looking for a PM" OR "looking for a product manager" US',
-    '"open role" "product manager" United States OR remote',
-    '"founding PM" OR "first PM" United States',
-    '"head of product" "hiring" US OR remote',
-    '"senior PM" OR "staff PM" "hiring" United States',
+    '"we\'re hiring" ("product manager" OR "product lead" OR "head of product" OR PM)',
+    '"we\'re hiring" ("software engineer" OR "program manager" OR "technical program manager")',
 ]
+
+# US target companies — posts are scraped only from employees of these companies.
+# This eliminates company-page spam and off-target roles at the source.
+# NOTE: the actor caps `authorsCompanies` at 20 per run, so we batch into groups.
+TARGET_COMPANIES = [
+    "Google", "Microsoft", "Amazon", "Meta", "Apple", "Adobe", "Salesforce",
+    "ServiceNow", "Amazon Web Services", "Databricks", "Snowflake", "NVIDIA",
+    "Cisco", "VMware", "Palantir Technologies", "MongoDB", "Atlassian", "GitHub",
+    "Capital One", "Intuit", "PayPal", "Visa", "Mastercard", "Oracle", "IBM",
+    "Accenture", "Walmart Global Tech", "Expedia Group", "Stripe", "Airbnb",
+    "OpenAI", "Zillow", "Redfin", "Tableau", "Qualtrics", "Docusign", "Netflix",
+    "Uber", "Lyft", "DoorDash", "Shopify", "Twilio", "Elastic", "Workday", "SAP",
+    "eBay", "Etsy", "Spotify", "Booking.com", "The Walt Disney Company", "LinkedIn",
+    "TikTok", "Pinterest", "Snap Inc.", "Robinhood", "Coinbase", "Figma", "Asana",
+    "Notion", "Dropbox", "Slack", "Zoom", "HubSpot", "Okta", "Cloudflare",
+    "CrowdStrike", "Datadog", "Splunk", "Confluent",
+]
+
+_COMPANY_BATCH_SIZE = 20  # actor hard cap on authorsCompanies
+
+
+def _company_batches() -> list[list[str]]:
+    """Split target companies into batches within the actor's 20-company cap."""
+    return [
+        TARGET_COMPANIES[i:i + _COMPANY_BATCH_SIZE]
+        for i in range(0, len(TARGET_COMPANIES), _COMPANY_BATCH_SIZE)
+    ]
 
 # Keywords that signal hiring intent in posts
 HIRING_KEYWORDS = [
@@ -49,18 +70,23 @@ HIRING_KEYWORDS = [
 
 async def scrape_linkedin_posts(
     queries: list[str] | None = None,
-    max_posts_per_query: int = 25,
-    date_range: str = "week",
+    max_posts_per_query: int = 40,
+    date_range: str = "24h",
 ) -> list[dict[str, Any]]:
     """Scrape LinkedIn for hiring-related posts via Apify.
 
     Uses harvestapi/linkedin-post-search — NO cookies, NO login.
     Your LinkedIn account is never touched.
 
+    Scrapes only posts authored by employees of TARGET_COMPANIES (batched
+    within the actor's 20-company cap). This keeps results on-target and
+    avoids company-page spam. Location/role are filtered downstream.
+
     Args:
         queries: Search queries. Defaults to SEARCH_QUERIES.
-        max_posts_per_query: Max posts to fetch per query.
-        date_range: "1h", "24h", "week", "month"
+        max_posts_per_query: Max posts per (query × company-batch) run.
+        date_range: "1h", "24h", "week", "month". Default 24h matches the
+            scan cadence so we don't pay to re-scrape the same posts.
 
     Returns:
         List of normalized post dicts ready for classification.
@@ -71,23 +97,29 @@ async def scrape_linkedin_posts(
         return []
 
     queries = queries or SEARCH_QUERIES
+    batches = _company_batches()
     all_posts: list[dict] = []
 
     async with httpx.AsyncClient(timeout=180) as client:
         for query in queries:
-            try:
-                posts = await _run_actor(
-                    client=client,
-                    token=settings.apify_token,
-                    query=query,
-                    max_results=max_posts_per_query,
-                    date_range=date_range,
-                )
-                all_posts.extend(posts)
-                log.info(f"LinkedIn posts: '{query[:50]}' → {len(posts)} results")
-            except Exception as e:
-                log.error(f"LinkedIn post scrape failed for '{query[:50]}': {e}")
-                continue
+            for companies in batches:
+                try:
+                    posts = await _run_actor(
+                        client=client,
+                        token=settings.apify_token,
+                        query=query,
+                        max_results=max_posts_per_query,
+                        date_range=date_range,
+                        authors_companies=companies,
+                    )
+                    all_posts.extend(posts)
+                    log.info(
+                        f"LinkedIn posts: '{query[:40]}' × {len(companies)} cos "
+                        f"→ {len(posts)} results"
+                    )
+                except Exception as e:
+                    log.error(f"LinkedIn post scrape failed for '{query[:40]}': {e}")
+                    continue
 
     # Deduplicate by post URL
     seen_urls: set[str] = set()
@@ -98,7 +130,10 @@ async def scrape_linkedin_posts(
             seen_urls.add(url)
             unique_posts.append(post)
 
-    log.info(f"LinkedIn post scrape complete: {len(unique_posts)} unique posts from {len(queries)} queries")
+    log.info(
+        f"LinkedIn post scrape complete: {len(unique_posts)} unique posts "
+        f"from {len(queries)} queries × {len(batches)} company batches"
+    )
     return unique_posts
 
 
@@ -106,8 +141,9 @@ async def _run_actor(
     client: httpx.AsyncClient,
     token: str,
     query: str,
-    max_results: int = 25,
-    date_range: str = "week",
+    max_results: int = 40,
+    date_range: str = "24h",
+    authors_companies: list[str] | None = None,
 ) -> list[dict]:
     """Run the Apify LinkedIn Posts actor and return normalized results.
 
@@ -121,12 +157,15 @@ async def _run_actor(
 
     # Step 1: Start the run
     run_url = f"https://api.apify.com/v2/acts/{LINKEDIN_POSTS_ACTOR}/runs"
-    payload = {
+    payload: dict = {
         "searchQueries": [query],
         "maxPosts": max_results,
         "postedLimit": date_range,
-        "sortBy": "relevance",
+        "sortBy": "date",  # newest first → fresh posts each scan, less re-scraping
     }
+    if authors_companies:
+        # Actor caps this at 20 — caller (_company_batches) guarantees that.
+        payload["authorsCompanies"] = authors_companies[:20]
 
     resp = await client.post(
         run_url, json=payload, params={"token": token}, timeout=30,
@@ -182,6 +221,7 @@ def _normalize_post(raw: dict) -> dict:
     engagement = raw.get("engagement", {}) or {}
     posted_at = raw.get("postedAt", {}) or {}
     job = raw.get("job", {}) or {}
+    article = raw.get("article", {}) or {}
 
     return {
         "platform": "linkedin",
@@ -191,6 +231,7 @@ def _normalize_post(raw: dict) -> dict:
         "author_title": author.get("info", ""),
         "author_url": author.get("linkedinUrl", ""),
         "author_company": _extract_company(author),
+        "author_type": author.get("type", ""),  # "profile" (person) vs "company"
         "likes": engagement.get("likes", 0),
         "comments": engagement.get("comments", 0),
         "reposts": engagement.get("shares", 0),
@@ -201,6 +242,9 @@ def _normalize_post(raw: dict) -> dict:
         "job_url": job.get("linkedinUrl", ""),
         "job_location": job.get("location", ""),
         "job_company": job.get("subtitle", "").replace("Job by ", "").replace("Jobs by ", ""),
+        # Linked job article (often carries the location, e.g. "...Edinburgh, UK")
+        "article_title": article.get("title", ""),
+        "article_link": article.get("link", ""),
     }
 
 
@@ -234,37 +278,49 @@ _FOREIGN_LOCATIONS = [
 ]
 
 
-def is_likely_us(post: dict) -> bool:
-    """Quick check if a post is likely about a US-based role.
-    Returns True if US or unclear (let classifier decide).
-    Returns False only if clearly foreign (saves Claude API call).
-    """
-    # Check job location if available
-    job_location = (post.get("job_location", "") or "").lower()
-    if job_location:
-        # Explicit US indicators → pass
-        us_terms = ["united states", "usa", "remote", "hybrid",
-                     "new york", "san francisco", "seattle", "austin",
-                     "california", "texas", "washington", "boston",
-                     "chicago", "denver", "los angeles", "atlanta"]
-        if any(t in job_location for t in us_terms):
-            return True
-        # Explicit foreign indicators → reject
-        if any(loc in job_location for loc in _FOREIGN_LOCATIONS):
-            return False
+# Locale fragments in job-board article links that signal a non-US role.
+_FOREIGN_URL_HINTS = [
+    "/es/", "/ja/", "/jp/", "/de/", "/fr/", "/in/jobs", "amazon.jobs/es",
+    "en-gb", "en-in", "en-ca", "en-au", ".co.uk", ".co.jp", ".co.in",
+    "/india", "/japan", "/canada", "/uk/", "/emea",
+]
 
-    # Check post content for foreign location signals
+_US_TERMS = [
+    "united states", " usa", "u.s.", " us ", " us,", " us-", "remote (us",
+    "us remote", "us-based", "us applicants",
+    "new york", "san francisco", "bay area", "seattle", "austin", "california",
+    "texas", "washington", "boston", "chicago", "denver", "los angeles",
+    "atlanta", "phoenix", "mclean", "virginia", " ca ", " ny ", " wa ", " tx ",
+    "santa clara", "mountain view", "sunnyvale", "san jose", "menlo park",
+]
+
+
+def is_likely_us(post: dict) -> bool:
+    """Check if a post is likely about a US-based role.
+
+    Stricter than before: company-targeting still surfaces many non-US roles
+    (these companies hire globally), so we now read the article title and the
+    job-board link locale in addition to content. Returns False when foreign
+    signals are present without any US signal.
+    """
     content = (post.get("content", "") or "").lower()
     author_title = (post.get("author_title", "") or "").lower()
-    combined = f"{content} {author_title} {job_location}"
+    job_location = (post.get("job_location", "") or "").lower()
+    article_title = (post.get("article_title", "") or "").lower()
+    article_link = (post.get("article_link", "") or "").lower()
 
-    # If clearly mentions a foreign location and NOT US → skip
+    combined = f"{content} {author_title} {job_location} {article_title}"
+
+    us_hits = sum(1 for t in _US_TERMS if t in combined)
     foreign_hits = sum(1 for loc in _FOREIGN_LOCATIONS if loc in combined)
-    us_hits = sum(1 for t in ["united states", "usa", "us ", " us,", "remote", "san francisco",
-                                "new york", "seattle", "austin", "california"] if t in combined)
+    foreign_url = any(h in article_link for h in _FOREIGN_URL_HINTS)
 
-    if foreign_hits > 0 and us_hits == 0:
+    # Clear US signal wins
+    if us_hits > 0:
+        return True
+    # Any foreign signal (text or URL locale) with no US signal → reject
+    if foreign_hits > 0 or foreign_url:
         return False
 
-    # Default: pass through (let classifier decide)
+    # No location signal at all → pass through (classifier/relevance gate decides)
     return True
