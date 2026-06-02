@@ -46,7 +46,7 @@ async def update_profile(data: dict):
         "address", "city", "state", "zip_code", "country",
         "linkedin", "website", "github",
         "current_company", "current_title", "years_experience",
-        "education", "skills", "cover_letter_default",
+        "education", "skills", "cover_letter_default", "voice_instructions",
         "work_auth", "sponsorship", "gender", "race", "veteran", "disability",
     ]
     update = {}

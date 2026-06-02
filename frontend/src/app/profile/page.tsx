@@ -123,6 +123,22 @@ export default function ProfilePage() {
           </div>
         ))}
 
+        {/* My Voice — AI generation instructions */}
+        <div className="jp-card" style={{ padding: 24, marginBottom: 20 }}>
+          <h2 style={{ fontSize: 16, fontWeight: 600, marginBottom: 4, color: "var(--jp-ink)" }}>My Voice</h2>
+          <p style={{ fontSize: 13, color: "var(--jp-mute)", marginBottom: 16 }}>
+            Tone &amp; style instructions for AI-generated cover letters and outreach messages.
+            Plain English — e.g. &ldquo;colloquial, hyper-personalized, weave in current trends.&rdquo;
+          </p>
+          <textarea
+            className="jp-input"
+            name="voice_instructions"
+            defaultValue={profile.voice_instructions || ""}
+            rows={7}
+            style={{ width: "100%", resize: "vertical" }}
+          />
+        </div>
+
         {/* Cover letter */}
         <div className="jp-card" style={{ padding: 24, marginBottom: 20 }}>
           <h2 style={{ fontSize: 16, fontWeight: 600, marginBottom: 16, color: "var(--jp-ink)" }}>Cover Letter</h2>

@@ -38,12 +38,20 @@ async def score_job(job_data: dict, profile_data: dict) -> dict[str, Any]:
     )
 
 
+def _with_voice(base_system: str, voice: str) -> str:
+    """Append the user's editable 'My Voice' instructions to a base prompt."""
+    if voice and voice.strip():
+        return f"{base_system}\n\n--- The candidate's voice & style (follow this closely) ---\n{voice.strip()}"
+    return base_system
+
+
 async def generate_outreach(
     post_content: str, author_name: str, author_title: str,
-    role_mentioned: str, user_profile: str,
+    role_mentioned: str, user_profile: str, voice: str = "",
 ) -> str:
     """Generate personalized outreach message. → OpenAI (creative writing).
     Falls back to Claude if OpenAI is unavailable."""
+    system = _with_voice(OUTREACH_SYSTEM, voice)
     prompt_user = (
         f"Hiring post by {author_name} ({author_title}):\n{post_content}\n\n"
         f"Role mentioned: {role_mentioned}\n\n"
@@ -51,21 +59,22 @@ async def generate_outreach(
     )
     try:
         if openai_client.is_available():
-            return await openai_client.complete(
-                system=OUTREACH_SYSTEM, user=prompt_user,
-            )
+            return await openai_client.complete(system=system, user=prompt_user)
     except Exception as e:
         log.warning(f"OpenAI outreach failed, falling back to Claude: {e}")
-    return await claude_client.complete(
-        system=OUTREACH_SYSTEM, user=prompt_user,
-    )
+    return await claude_client.complete(system=system, user=prompt_user)
 
 
 async def generate_cover_letter(
     job_title: str, company: str, job_description: str, user_profile: str,
+    voice: str = "",
 ) -> str:
     """Generate tailored cover letter. → OpenAI (creative writing).
-    Falls back to Claude if OpenAI is unavailable."""
+    Falls back to Claude if OpenAI is unavailable.
+
+    Note: the caller appends a fixed signature, so the model is told NOT to
+    write its own closing/sign-off."""
+    system = _with_voice(COVER_LETTER_SYSTEM, voice)
     prompt_user = (
         f"Job: {job_title} at {company}\n\n"
         f"Description:\n{job_description[:4000]}\n\n"
@@ -73,14 +82,10 @@ async def generate_cover_letter(
     )
     try:
         if openai_client.is_available():
-            return await openai_client.complete(
-                system=COVER_LETTER_SYSTEM, user=prompt_user,
-            )
+            return await openai_client.complete(system=system, user=prompt_user)
     except Exception as e:
         log.warning(f"OpenAI cover letter failed, falling back to Claude: {e}")
-    return await claude_client.complete(
-        system=COVER_LETTER_SYSTEM, user=prompt_user,
-    )
+    return await claude_client.complete(system=system, user=prompt_user)
 
 
 async def analyze_outcome(outcome_data: dict) -> dict[str, Any]:
@@ -198,7 +203,11 @@ Write a concise, compelling cover letter (250-400 words) that:
 - Maps the candidate's experience to the role's requirements
 - Shows understanding of the company's product and challenges
 - Ends with confidence, not desperation
-- Uses professional but natural language (not corporate-speak)"""
+- Uses professional but natural language (not corporate-speak)
+
+IMPORTANT: Do NOT write a closing salutation, sign-off, or signature
+(no "Sincerely", "Best", or name at the end) — a signature block is
+appended automatically. End with your final body paragraph."""
 
 OUTCOME_ANALYSIS_SYSTEM = """You are a PM career strategist analyzing application outcomes.
 

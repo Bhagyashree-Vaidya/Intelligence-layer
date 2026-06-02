@@ -226,6 +226,22 @@ function JobCard({ job, isApplied, onApply, onSave }: {
     } catch { /* ignore */ }
   };
 
+  const handlePdf = () => {
+    const w = window.open("", "_blank");
+    if (!w) { alert("Pop-up blocked — allow pop-ups to download the PDF."); return; }
+    const safe = coverLetter
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    w.document.write(
+      `<!doctype html><html><head><title>Cover Letter - ${job.company}</title>` +
+      `<style>@page{margin:1in;}body{font-family:Georgia,'Times New Roman',serif;` +
+      `font-size:12pt;line-height:1.6;color:#111;white-space:pre-wrap;}</style></head>` +
+      `<body>${safe}</body></html>`
+    );
+    w.document.close();
+    w.focus();
+    setTimeout(() => w.print(), 300);
+  };
+
   const handleApply = async () => {
     if (isApplied) return;
     setApplying(true);
@@ -315,19 +331,24 @@ function JobCard({ job, isApplied, onApply, onSave }: {
       </div>
     </div>
 
-    {/* Cover letter */}
+    {/* Cover letter — editable */}
     {coverLetter && (
       <div style={{ marginTop: 14 }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
-          <span className="jp-eyebrow">Cover letter</span>
+          <span className="jp-eyebrow">Cover letter — edit before exporting</span>
           <div style={{ display: "flex", gap: 8 }}>
             <button className="jp-btn sm ghost" onClick={handleCopy}>{copied ? "Copied ✓" : "Copy"}</button>
+            <button className="jp-btn sm ghost" onClick={handlePdf}>Download PDF</button>
             <button className="jp-btn sm ghost" onClick={() => setCoverLetter("")}>Dismiss</button>
           </div>
         </div>
-        <div className="neu-well" style={{ fontSize: 14, lineHeight: 1.7, whiteSpace: "pre-wrap" }}>
-          {coverLetter}
-        </div>
+        <textarea
+          className="jp-input"
+          value={coverLetter}
+          onChange={(e) => setCoverLetter(e.target.value)}
+          rows={16}
+          style={{ width: "100%", resize: "vertical", fontSize: 14, lineHeight: 1.7 }}
+        />
       </div>
     )}
     </div>

@@ -11,6 +11,15 @@ from app.logger import log
 
 router = APIRouter(prefix="/api", tags=["jobs"])
 
+# Fixed cover-letter sign-off — appended in code so contact details are never
+# altered or hallucinated by the AI.
+COVER_LETTER_SIGNATURE = (
+    "Best,\n"
+    "Bhagyashree Vaidya (Shree)\n"
+    "bhagyav@uw.edu | (206) 673-0335\n"
+    "LinkedIn: https://www.linkedin.com/in/bhagyashree-vaidya-6b47a811a/"
+)
+
 
 @router.get("/jobs")
 async def list_jobs(
@@ -113,10 +122,14 @@ async def generate_cover_letter(job_id: int):
             company=job.get("company", ""),
             job_description=job.get("description", "") or "",
             user_profile=user_summary,
+            voice=profile.get("voice_instructions", "") or "",
         )
     except Exception as e:
         log.error(f"Cover letter generation failed for job {job_id}: {e}")
         raise HTTPException(502, "Cover letter generation failed — check AI keys")
+
+    # Append the fixed signature deterministically (never AI-altered).
+    letter = f"{letter.rstrip()}\n\n{COVER_LETTER_SIGNATURE}"
 
     return {
         "cover_letter": letter,

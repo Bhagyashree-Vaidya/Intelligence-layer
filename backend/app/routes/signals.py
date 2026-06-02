@@ -141,6 +141,7 @@ async def generate_outreach(req: OutreachRequest):
         author_title=req.author_title,
         role_mentioned=req.role_mentioned,
         user_profile=user_summary,
+        voice=profile.get("voice_instructions", "") or "",
     )
 
     return {"outreach_message": message}
@@ -220,6 +221,7 @@ async def batch_outreach(
                 author_title=contact.get("title", ""),
                 role_mentioned=contact.get("latest_role_mentioned", ""),
                 user_profile=user_summary,
+                voice=profile.get("voice_instructions", "") or "",
             )
 
             # Store in DB
