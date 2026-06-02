@@ -186,7 +186,8 @@
     "docusign": "DocuSign",
     "purestorage": "PureStorage",
     "hpe": "HewlettPackardEnterprise",
-    "nutanix": "NutanixInc"
+    "nutanix": "NutanixInc",
+    "servicenow": "ServiceNow"
   },
   "workday": {
     "salesforce": {
