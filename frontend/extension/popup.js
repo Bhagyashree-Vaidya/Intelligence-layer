@@ -44,3 +44,41 @@ fillBtn.addEventListener('click', () => {
     window.close();
   });
 });
+
+// ── Night Shift queue runner ────────────────────────────────────────────────
+const nsBtn = document.getElementById('nightshift-btn');
+const nsLabel = document.getElementById('ns-label');
+const nsProgress = document.getElementById('ns-progress');
+
+// Show the button with a live count of queued jobs.
+chrome.runtime.sendMessage({ action: 'getNightShiftQueue' }, (resp) => {
+  if (resp?.ok && resp.queue && resp.queue.length > 0) {
+    nsBtn.style.display = 'block';
+    nsLabel.textContent = `Run Night Shift Queue (${resp.queue.length})`;
+  }
+});
+
+// Live progress updates while the queue runs.
+chrome.runtime.onMessage.addListener((msg) => {
+  if (msg.action === 'nightShiftProgress') {
+    nsProgress.style.display = 'block';
+    nsProgress.innerHTML = `Filling ${msg.index}/${msg.total}: <strong>${msg.company}</strong> — ${msg.title || ''}`;
+  }
+});
+
+nsBtn.addEventListener('click', () => {
+  nsBtn.disabled = true;
+  nsLabel.textContent = 'Running…';
+  nsProgress.style.display = 'block';
+  nsProgress.textContent = 'Starting Night Shift…';
+  chrome.runtime.sendMessage({ action: 'runNightShiftQueue' }, (resp) => {
+    if (resp?.ok) {
+      nsProgress.innerHTML = `Done: <strong>${resp.filled} filled</strong>, ${resp.errored} errored. Review each open tab, upload your resume, and submit.`;
+      nsLabel.textContent = 'Night Shift complete';
+    } else {
+      nsProgress.textContent = `Error: ${resp?.error || 'unknown'}`;
+      nsBtn.disabled = false;
+      nsLabel.textContent = 'Retry Night Shift Queue';
+    }
+  });
+});

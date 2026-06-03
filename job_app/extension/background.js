@@ -80,7 +80,98 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       .catch(e => sendResponse({ ok: false, error: e.message }));
     return true;
   }
+
+  // ── Night Shift: fetch the review queue ──────────────────────────────────
+  if (msg.action === 'getNightShiftQueue') {
+    fetch(`${API}/api/night-shift/queue?status=queued`)
+      .then(r => r.json())
+      .then(data => sendResponse({ ok: true, queue: data.queue || [] }))
+      .catch(e => sendResponse({ ok: false, error: e.message }));
+    return true;
+  }
+
+  // ── Night Shift: run the queue (open each job, fill, park) ────────────────
+  if (msg.action === 'runNightShiftQueue') {
+    runNightShiftQueue((progress) => {
+      // Stream progress to popup if it's still open (best-effort).
+      chrome.runtime.sendMessage({ action: 'nightShiftProgress', ...progress }).catch(() => {});
+    }).then(summary => sendResponse({ ok: true, ...summary }))
+      .catch(e => sendResponse({ ok: false, error: e.message }));
+    return true;
+  }
 });
+
+
+// ── Night Shift queue runner ───────────────────────────────────────────────
+// Opens each queued job in a tab, auto-fills via content.js, marks it 'filled'
+// (or 'error'), and moves on. NEVER submits — the user reviews + submits.
+
+async function markItem(id, body) {
+  try {
+    await fetch(`${API}/api/night-shift/queue/${id}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  } catch (e) {
+    console.error('[JobPilot] markItem failed', e);
+  }
+}
+
+function waitForTabLoad(tabId, timeoutMs = 25000) {
+  return new Promise((resolve) => {
+    let done = false;
+    const finish = (ok) => { if (!done) { done = true; resolve(ok); } };
+    const listener = (id, info) => {
+      if (id === tabId && info.status === 'complete') {
+        chrome.tabs.onUpdated.removeListener(listener);
+        // small settle delay for SPA forms to render
+        setTimeout(() => finish(true), 2500);
+      }
+    };
+    chrome.tabs.onUpdated.addListener(listener);
+    setTimeout(() => { chrome.tabs.onUpdated.removeListener(listener); finish(false); }, timeoutMs);
+  });
+}
+
+async function runNightShiftQueue(onProgress) {
+  const resp = await fetch(`${API}/api/night-shift/queue?status=queued`);
+  const data = await resp.json();
+  const queue = data.queue || [];
+
+  let filled = 0, errored = 0;
+  for (let i = 0; i < queue.length; i++) {
+    const item = queue[i];
+    onProgress({ index: i + 1, total: queue.length, company: item.company, title: item.title });
+
+    if (!item.url) {
+      await markItem(item.id, { status: 'error', error_message: 'No application URL' });
+      errored++;
+      continue;
+    }
+
+    let tab;
+    try {
+      tab = await chrome.tabs.create({ url: item.url, active: true });
+      const loaded = await waitForTabLoad(tab.id);
+      if (!loaded) throw new Error('Page load timed out');
+
+      // Inject the existing autofill content script (fills everything but the file).
+      await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['content.js'] });
+      // Give it time to fill.
+      await new Promise(r => setTimeout(r, 4000));
+
+      await markItem(item.id, { status: 'filled', filled_at: new Date().toISOString() });
+      filled++;
+    } catch (e) {
+      await markItem(item.id, { status: 'error', error_message: String(e).slice(0, 300) });
+      errored++;
+    }
+    // Leave the tab OPEN so the user can review + upload resume + submit.
+  }
+
+  return { filled, errored, total: queue.length };
+}
 
 // Sync on install
 chrome.runtime.onInstalled.addListener(() => fetchProfile());
