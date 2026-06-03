@@ -11,7 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings
 from app.logger import log
-from app.routes import health, profile, jobs, scraper, applications, answers, signals, auto_apply
+from app.routes import health, profile, jobs, scraper, applications, answers, signals, auto_apply, night_shift
 
 
 @asynccontextmanager
@@ -59,6 +59,7 @@ app.include_router(applications.router)
 app.include_router(answers.router)
 app.include_router(signals.router)
 app.include_router(auto_apply.router)
+app.include_router(night_shift.router)
 
 
 @app.get("/")
