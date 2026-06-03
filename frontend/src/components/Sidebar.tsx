@@ -66,6 +66,15 @@ export function Sidebar() {
           <span className="count">{stats.applications}</span>
         </Link>
 
+        <Link href="/night-shift" className={`jp-nav-item ${pathname === "/night-shift" ? "active" : ""}`}>
+          <span className="ic">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" />
+            </svg>
+          </span>
+          <span>Night Shift</span>
+        </Link>
+
         <div className="jp-nav-section">Account</div>
 
         <Link href="/profile" className={`jp-nav-item ${pathname === "/profile" ? "active" : ""}`}>

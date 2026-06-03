@@ -250,3 +250,72 @@ export function batchGenerateOutreach(params: Record<string, any> = {}): Promise
   const qs = new URLSearchParams(Object.entries(params).map(([k, v]) => [k, String(v)])).toString();
   return request(`/api/signals/outreach/batch${qs ? `?${qs}` : ""}`, { method: "POST" });
 }
+
+// ── Night Shift ─────────────────────────────────────────────────────────────
+
+export interface NightShiftSettings {
+  id: number;
+  enabled: boolean;
+  max_per_night: number;
+  min_fit_score: number;
+  enabled_roles: string;
+  last_run_at: string | null;
+  updated_at: string;
+}
+
+export interface NightShiftQueueItem {
+  id: number;
+  job_id: number;
+  company: string;
+  title: string;
+  url: string;
+  role: string;
+  resume_id: number | null;
+  tier: string;
+  status: string;
+  error_message: string;
+  queued_at: string;
+  filled_at: string | null;
+  ai_overall_fit?: number;
+}
+
+export function getNightShiftSettings(): Promise<{ settings: NightShiftSettings }> {
+  return request("/api/night-shift/settings");
+}
+
+export function updateNightShiftSettings(
+  body: Partial<NightShiftSettings>
+): Promise<{ settings: NightShiftSettings }> {
+  return request("/api/night-shift/settings", {
+    method: "PUT",
+    body: JSON.stringify(body),
+  });
+}
+
+export function selectNightShift(dryRun = false): Promise<any> {
+  return request(`/api/night-shift/select?dry_run=${dryRun}`, { method: "POST" });
+}
+
+export function getNightShiftQueue(status?: string): Promise<{
+  queue: NightShiftQueueItem[];
+  total: number;
+}> {
+  const qs = status ? `?status=${status}` : "";
+  return request(`/api/night-shift/queue${qs}`);
+}
+
+export function updateNightShiftItem(id: number, body: Record<string, any>) {
+  return request(`/api/night-shift/queue/${id}`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export function getNightShiftTiers(): Promise<{
+  tier_1_never_apply: string[];
+  tier_2_eligible: string[];
+  tier_1_count: number;
+  tier_2_count: number;
+}> {
+  return request("/api/night-shift/tiers");
+}
