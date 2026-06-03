@@ -199,7 +199,7 @@ export default function NightShiftPage() {
       {tiers && (
         <details style={{ marginTop: 32 }}>
           <summary style={{ cursor: "pointer", fontSize: 13, fontWeight: 600 }}>
-            🛡️ Guardrails — {tiers.tier_1_never_apply.length} protected companies (never auto-applied)
+            🛡️ Guardrails — your Top 20 are never auto-applied
           </summary>
           <div className="jp-mute" style={{ fontSize: 12, marginTop: 10, lineHeight: 1.8 }}>
             <strong>Never touched (Tier 1):</strong> {tiers.tier_1_never_apply.join(", ")}
