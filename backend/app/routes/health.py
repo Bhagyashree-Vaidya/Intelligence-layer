@@ -13,6 +13,14 @@ async def health():
     return {"status": "ok", "service": "jobpilot-api"}
 
 
+@router.post("/health/daily-email")
+async def trigger_daily_health_email():
+    """Manually run the daily pipeline-health check and email the summary now."""
+    from app.workers import run_daily_health_email
+    result = await run_daily_health_email(ctx={})
+    return {"ok": True, **result}
+
+
 @router.get("/health/detailed")
 async def health_detailed():
     """Detailed status of all connected services."""

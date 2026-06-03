@@ -318,6 +318,107 @@ async def _send_coverage_alert(
         log.error(f"Failed to send coverage alert email: {e}")
 
 
+def _send_email(subject: str, body: str) -> bool:
+    """Generic plain-text email to the owner via Gmail SMTP. Returns success."""
+    import smtplib
+    from email.mime.text import MIMEText
+    from app.config import get_settings
+
+    s = get_settings()
+    if not s.smtp_password:
+        log.warning("SMTP_PASSWORD not set — cannot send email")
+        return False
+
+    msg = MIMEText(body)
+    msg["Subject"] = subject
+    msg["From"] = s.alert_email
+    msg["To"] = s.alert_email
+    try:
+        with smtplib.SMTP(s.smtp_host, s.smtp_port) as server:
+            server.starttls()
+            server.login(s.alert_email, s.smtp_password)
+            server.send_message(msg)
+        log.info(f"Email sent to {s.alert_email}: {subject}")
+        return True
+    except Exception as e:
+        log.error(f"Failed to send email: {e}")
+        return False
+
+
+async def run_daily_health_email(ctx: dict) -> dict:
+    """Daily JobPilot pipeline health summary, emailed to the owner.
+
+    Reuses run_coverage_check (coverage + regression alerts + snapshot), then
+    adds scoring-backlog and scrape-recency checks, and emails a digest.
+    """
+    from datetime import datetime, timezone
+    from app import database as db
+
+    supa = db.get_db()
+    cov = await run_coverage_check(ctx)
+    total_jobs = cov["total_jobs"]
+    zero = cov["zero_job_companies"]
+    new_gaps = cov["new_gaps"]
+    fixed = cov["fixed"]
+    covered = len(TARGET_COMPANIES) - len(zero)
+    coverage_pct = round(100 * covered / len(TARGET_COMPANIES), 1) if TARGET_COMPANIES else 0
+
+    # Scoring backlog (jobs that never got scored — score 0/NULL)
+    try:
+        bl = supa.table("jobs").select("id", count="exact").or_(
+            "relevancy_score.eq.0,relevancy_score.is.null"
+        ).execute()
+        backlog = bl.count or 0
+    except Exception:
+        backlog = -1
+
+    # Scrape recency
+    hours_since = None
+    try:
+        recent = supa.table("jobs").select("scraped_at").order(
+            "scraped_at", desc=True
+        ).limit(1).execute()
+        if recent.data and recent.data[0].get("scraped_at"):
+            dt = datetime.fromisoformat(recent.data[0]["scraped_at"].replace("Z", "+00:00"))
+            hours_since = round((datetime.now(timezone.utc) - dt).total_seconds() / 3600, 1)
+    except Exception:
+        pass
+
+    # Flags — anything wrong
+    flags = []
+    if new_gaps:
+        flags.append(f"REGRESSION: lost coverage → {', '.join(sorted(new_gaps))}")
+    if coverage_pct < 80:
+        flags.append(f"Coverage low: {coverage_pct}%")
+    if total_jobs < 2000:
+        flags.append(f"Total jobs low: {total_jobs} (expected 4000+)")
+    if backlog > 200:
+        flags.append(f"Scoring backlog: {backlog} unscored jobs (run /api/rescore?only_unscored=true)")
+    if hours_since is not None and hours_since > 12:
+        flags.append(f"No scrape in {hours_since}h")
+
+    status = "ISSUES" if flags else "HEALTHY"
+    subject = f"JobPilot daily health — {status} · {total_jobs} jobs · {coverage_pct}% coverage"
+    body = (
+        f"JobPilot Daily Health — {status}\n"
+        f"{'=' * 40}\n\n"
+        f"Total jobs:        {total_jobs}\n"
+        f"Coverage:          {covered}/{len(TARGET_COMPANIES)} companies ({coverage_pct}%)\n"
+        f"Unscored backlog:  {backlog}\n"
+        f"Last scrape:       {hours_since}h ago\n"
+        f"Companies at 0:    {', '.join(zero) if zero else 'none'}\n"
+        + (f"Newly fixed:       {', '.join(sorted(fixed))}\n" if fixed else "")
+        + "\n"
+        + ("FLAGS:\n" + "\n".join(f"  ⚠ {f}" for f in flags) if flags else "✅ No issues detected.")
+        + "\n\n"
+        f"Jobs:   https://hire.shreevaidya.com\n"
+        f"Health: https://jobs.shreevaidya.com/api/scrape/health\n"
+    )
+    _send_email(subject, body)
+    return {"status": status, "flags": flags, "total_jobs": total_jobs,
+            "coverage_pct": coverage_pct, "backlog": backlog, "hours_since": hours_since}
+
+
 async def run_health_check(ctx: dict) -> dict:
     """Standalone coverage health check — runs independently of scrape."""
     return await run_coverage_check(ctx)
@@ -348,6 +449,7 @@ class WorkerSettings:
         run_scrape_all,
         run_auto_apply,
         run_health_check,
+        run_daily_health_email,
     ]
 
     cron_jobs = [
@@ -362,6 +464,9 @@ class WorkerSettings:
 
         # ── HEALTH CHECK: 2x/day ──
         cron(run_health_check, hour={6, 18}, minute=30),
+
+        # ── DAILY HEALTH EMAIL: once at 16:00 UTC (9am PT) ──
+        cron(run_daily_health_email, hour={16}, minute=0),
     ]
 
     on_startup = startup
