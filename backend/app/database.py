@@ -76,7 +76,8 @@ async def get_resumes() -> list[dict]:
     return resp.data or []
 
 
-async def add_resume(filename: str, original_name: str, role_tags: str, is_default: bool) -> int:
+async def add_resume(filename: str, original_name: str, role_tags: str,
+                     is_default: bool, storage_path: str = "") -> int:
     db = get_db()
     if is_default:
         db.table("resumes").update({"is_default": False}).neq("id", 0).execute()
@@ -85,16 +86,74 @@ async def add_resume(filename: str, original_name: str, role_tags: str, is_defau
         "original_name": original_name,
         "role_tags": role_tags,
         "is_default": is_default,
+        "storage_path": storage_path,
         "uploaded_at": datetime.now(timezone.utc).isoformat(),
     }).execute()
     return resp.data[0]["id"] if resp.data else 0
 
 
+# ── Resume file storage (Supabase Storage — survives Fly restarts) ─────────────
+
+RESUME_BUCKET = "resumes"
+
+
+def upload_resume_file(storage_path: str, data: bytes, content_type: str = "application/pdf") -> bool:
+    """Upload resume bytes to the private Supabase Storage 'resumes' bucket.
+
+    Fixes the /tmp-wipe bug: files here persist across Fly machine restarts.
+    Best-effort: returns False on failure so the caller can fall back to disk.
+    """
+    try:
+        db = get_db()
+        db.storage.from_(RESUME_BUCKET).upload(
+            path=storage_path,
+            file=data,
+            file_options={"content-type": content_type, "x-upsert": "true"},
+        )
+        log.info(f"Resume uploaded to Storage: {storage_path}")
+        return True
+    except Exception as e:
+        log.error(f"upload_resume_file failed ({storage_path}): {e}")
+        return False
+
+
+def download_resume_file(storage_path: str) -> bytes | None:
+    """Download resume bytes from Supabase Storage. None on failure."""
+    try:
+        db = get_db()
+        return db.storage.from_(RESUME_BUCKET).download(storage_path)
+    except Exception as e:
+        log.error(f"download_resume_file failed ({storage_path}): {e}")
+        return None
+
+
+def create_resume_signed_url(storage_path: str, expires_in: int = 3600) -> str | None:
+    """Create a temporary signed URL so the browser/extension can fetch the file
+    directly (bucket is private). Default 1h expiry."""
+    try:
+        db = get_db()
+        res = db.storage.from_(RESUME_BUCKET).create_signed_url(storage_path, expires_in)
+        if isinstance(res, dict):
+            return res.get("signedURL") or res.get("signedUrl") or res.get("signed_url")
+        # object form
+        return getattr(res, "signedURL", None) or getattr(res, "signed_url", None)
+    except Exception as e:
+        log.error(f"create_resume_signed_url failed ({storage_path}): {e}")
+        return None
+
+
 async def delete_resume(resume_id: int) -> str | None:
     db = get_db()
-    resp = db.table("resumes").select("filename").eq("id", resume_id).execute()
+    resp = db.table("resumes").select("filename, storage_path").eq("id", resume_id).execute()
     if resp.data:
         filename = resp.data[0]["filename"]
+        storage_path = resp.data[0].get("storage_path") or ""
+        # Remove from Storage too (best-effort).
+        if storage_path:
+            try:
+                db.storage.from_(RESUME_BUCKET).remove([storage_path])
+            except Exception as e:
+                log.warning(f"Storage remove failed for {storage_path}: {e}")
         db.table("resumes").delete().eq("id", resume_id).execute()
         return filename
     return None
