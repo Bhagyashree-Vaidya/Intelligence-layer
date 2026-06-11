@@ -93,7 +93,8 @@ async def generate_strategy_memo(
     user_profile: str, voice: str = "",
 ) -> str:
     """A 1-page '90-day plan / opportunity memo' for a target company, written
-    to attach to a hiring manager. Claude-primary (long-form reasoning)."""
+    to attach to a hiring manager. OpenAI-primary (user standardizes all content
+    generation on OpenAI; her instruction standards live in the system prompts)."""
     system = _with_voice(STRATEGY_MEMO_SYSTEM, voice)
     prompt_user = (
         f"Company: {company}\n"
@@ -101,42 +102,42 @@ async def generate_strategy_memo(
         f"My background:\n{user_profile}"
     )
     try:
-        if claude_client.is_available():
-            return await claude_client.complete(system=system, user=prompt_user, max_tokens=1400)
+        if openai_client.is_available():
+            return await openai_client.complete(system=system, user=prompt_user)
     except Exception as e:
-        log.warning(f"Claude memo failed, falling back to OpenAI: {e}")
-    return await openai_client.complete(system=system, user=prompt_user)
+        log.warning(f"OpenAI memo failed, falling back to Claude: {e}")
+    return await claude_client.complete(system=system, user=prompt_user, max_tokens=1400)
 
 
 async def generate_pm_concept(focus: str = "") -> str:
     """One crisp PM concept of the day — a framework explained in plain English
-    with a real example, so the candidate builds fluency. Claude-primary."""
+    with a real example, so the candidate builds fluency. OpenAI-primary."""
     system = PM_CONCEPT_SYSTEM
     prompt_user = f"Topic focus (optional): {focus}" if focus else "Pick a high-value PM concept I should know for interviews."
     try:
-        if claude_client.is_available():
-            return await claude_client.complete(system=system, user=prompt_user, max_tokens=900)
+        if openai_client.is_available():
+            return await openai_client.complete(system=system, user=prompt_user)
     except Exception as e:
-        log.warning(f"Claude pm_concept failed, falling back to OpenAI: {e}")
-    return await openai_client.complete(system=system, user=prompt_user)
+        log.warning(f"OpenAI pm_concept failed, falling back to Claude: {e}")
+    return await claude_client.complete(system=system, user=prompt_user, max_tokens=900)
 
 
 async def generate_linkedin_article(
     topic: str, user_profile: str, voice: str = "",
 ) -> str:
     """A LinkedIn post that sounds human, builds the candidate's PM brand, and
-    invites engagement. Claude-primary (voice-sensitive writing)."""
+    invites engagement. OpenAI-primary."""
     system = _with_voice(LINKEDIN_ARTICLE_SYSTEM, voice)
     prompt_user = (
         f"Topic: {topic or 'a lesson from my PM/eng work this week'}\n\n"
         f"My background (for authenticity, do not list it verbatim):\n{user_profile}"
     )
     try:
-        if claude_client.is_available():
-            return await claude_client.complete(system=system, user=prompt_user, max_tokens=900)
+        if openai_client.is_available():
+            return await openai_client.complete(system=system, user=prompt_user)
     except Exception as e:
-        log.warning(f"Claude linkedin failed, falling back to OpenAI: {e}")
-    return await openai_client.complete(system=system, user=prompt_user)
+        log.warning(f"OpenAI linkedin failed, falling back to Claude: {e}")
+    return await claude_client.complete(system=system, user=prompt_user, max_tokens=900)
 
 
 async def analyze_outcome(outcome_data: dict) -> dict[str, Any]:
