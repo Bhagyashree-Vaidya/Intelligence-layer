@@ -281,12 +281,19 @@ async def normalize_job_dates() -> int:
 async def search_jobs(
     query: str = "", company: str = "", location: str = "", role: str = "",
     freshness: str = "", sort: str = "relevancy", page: int = 1, per_page: int = 40,
+    targets_only: bool = False,
 ) -> tuple[list[dict], int]:
     db = get_db()
     q = db.table("jobs").select("*", count="exact")
 
     if query:
         q = q.or_(f"title.ilike.%{query}%,description.ilike.%{query}%")
+    if targets_only:
+        # "My Targets": restrict to the 69 target companies (Tier-1 + Tier-2)
+        # so the daily 'apply 5' pulls from real targets, not generic noise.
+        from app.services.night_shift_config import TARGET_KEYWORDS
+        ors = ",".join(f"company.ilike.%{kw}%" for kw in TARGET_KEYWORDS)
+        q = q.or_(ors)
     if company:
         q = q.ilike("company", f"%{company}%")
     if location:

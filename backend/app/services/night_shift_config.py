@@ -105,3 +105,20 @@ def night_shift_eligible(company: str) -> tuple[bool, str]:
     if is_tier_2(company):
         return True, "tier_2_eligible"
     return False, "not_in_target_tiers"
+
+
+# ── All target companies (Tier-1 + Tier-2) — for the "My Targets" jobs filter ─
+# Short, distinctive keywords that match the messy company slugs via ILIKE.
+TARGET_KEYWORDS: list[str] = sorted({
+    "google", "microsoft", "amazon", "meta", "facebook", "apple", "adobe",
+    "salesforce", "servicenow", "databricks", "snowflake", "nvidia", "cisco",
+    "vmware", "palantir", "mongodb", "atlassian", "github", "capital one",
+    "intuit", "paypal", "visa", "mastercard", "oracle", "ibm", "accenture",
+    "walmart", "expedia", "stripe", "airbnb", "openai", "zillow", "redfin",
+    "tableau", "qualtrics", "docusign", "netflix", "uber", "lyft", "doordash",
+    "shopify", "twilio", "elastic", "workday", "sap", "ebay", "etsy", "spotify",
+    "booking", "disney", "linkedin", "tiktok", "pinterest", "snap", "robinhood",
+    "coinbase", "figma", "asana", "notion", "dropbox", "slack", "zoom",
+    "hubspot", "okta", "cloudflare", "crowdstrike", "datadog", "splunk",
+    "confluent",
+})

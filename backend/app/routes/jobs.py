@@ -25,11 +25,13 @@ COVER_LETTER_SIGNATURE = (
 async def list_jobs(
     q: str = "", company: str = "", location: str = "", role: str = "",
     freshness: str = "", sort: str = "relevancy", page: int = 1,
+    targets_only: bool = False,
 ):
     """Search and filter jobs with pagination."""
     jobs, total = await db.search_jobs(
         q, company, location, role,
         freshness=freshness, sort=sort, page=page, per_page=40,
+        targets_only=targets_only,
     )
 
     # Enrich each job
