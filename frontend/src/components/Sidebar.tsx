@@ -28,6 +28,28 @@ export function Sidebar() {
       </Link>
 
       <nav style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+        <div className="jp-nav-section">Daily Drive</div>
+
+        <Link href="/daily" className={`jp-nav-item ${pathname === "/daily" ? "active" : ""}`}>
+          <span className="ic">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M9 11l3 3L22 4" />
+              <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+            </svg>
+          </span>
+          <span>Today</span>
+        </Link>
+
+        <Link href="/weekly" className={`jp-nav-item ${pathname === "/weekly" ? "active" : ""}`}>
+          <span className="ic">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="4" width="18" height="18" rx="2" />
+              <path d="M16 2v4M8 2v4M3 10h18" />
+            </svg>
+          </span>
+          <span>This Week</span>
+        </Link>
+
         <div className="jp-nav-section">Workspace</div>
 
         <Link href="/" className={`jp-nav-item ${pathname === "/" ? "active" : ""}`}>

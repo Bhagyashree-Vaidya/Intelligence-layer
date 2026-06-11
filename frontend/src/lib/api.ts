@@ -319,3 +319,56 @@ export function getNightShiftTiers(): Promise<{
 }> {
   return request("/api/night-shift/tiers");
 }
+
+// ── Daily / Weekly tasks ─────────────────────────────────────────────────────
+
+export interface TaskItem {
+  key: string;
+  label: string;
+  done: boolean;
+  notes: string;
+}
+
+export interface Funnel {
+  applications_sent: number;
+  interviews: number;
+  offers: number;
+  interview_rate: number;
+  offer_rate: number;
+  responses: number;
+  response_rate: number;
+  rejections: number;
+}
+
+export function getToday(): Promise<{ date: string; tasks: TaskItem[]; funnel: Funnel }> {
+  return request("/api/tasks/today");
+}
+
+export function getWeek(): Promise<{ week_start: string; tasks: TaskItem[] }> {
+  return request("/api/tasks/week");
+}
+
+export function tickTask(taskKey: string, cadence: "daily" | "weekly", done: boolean, notes = "") {
+  return request("/api/tasks/tick", {
+    method: "POST",
+    body: JSON.stringify({ task_key: taskKey, cadence, done, notes }),
+  });
+}
+
+export function getMemoTarget(): Promise<{ target: any; candidates: any[] }> {
+  return request("/api/tasks/memo-target");
+}
+
+export function generateMemo(body: {
+  company: string; target_name?: string; target_title?: string; target_url?: string;
+}): Promise<{ id: number; company: string; target_name: string; target_url: string; memo: string }> {
+  return request("/api/tasks/generate/memo", { method: "POST", body: JSON.stringify(body) });
+}
+
+export function generatePmConcept(focus = ""): Promise<{ id: number; concept: string }> {
+  return request("/api/tasks/generate/pm-concept", { method: "POST", body: JSON.stringify({ focus }) });
+}
+
+export function generateArticle(topic = ""): Promise<{ id: number; article: string }> {
+  return request("/api/tasks/generate/article", { method: "POST", body: JSON.stringify({ topic }) });
+}
