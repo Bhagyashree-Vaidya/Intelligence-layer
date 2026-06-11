@@ -6,7 +6,7 @@ import { MatchRing } from "@/components/MatchRing";
 
 export default function Dashboard() {
   const [data, setData] = useState<JobsResponse | null>(null);
-  const [filters, setFilters] = useState({ q: "", company: "", location: "", role: "", freshness: "", sort: "relevancy" });
+  const [filters, setFilters] = useState({ q: "", company: "", location: "", role: "", freshness: "", sort: "relevancy", targets_only: "" });
   const [page, setPage] = useState(1);
   const [scraping, setScraping] = useState(false);
   const [scrapeMsg, setScrapeMsg] = useState("");
@@ -51,6 +51,7 @@ export default function Dashboard() {
       role: fd.get("role") as string || "",
       freshness: filters.freshness,
       sort: filters.sort,
+      targets_only: filters.targets_only,
     });
     setPage(1);
   };
@@ -147,6 +148,21 @@ export default function Dashboard() {
                   type="button"
                   className={filters.sort === val ? "on" : ""}
                   onClick={() => { setFilters((f) => ({ ...f, sort: val })); setPage(1); }}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 14, marginLeft: "auto" }}>
+            <span className="jp-eyebrow">Scope</span>
+            <div className="jp-seg">
+              {[["", "All jobs"], ["true", "★ My Targets"]].map(([val, label]) => (
+                <button
+                  key={val}
+                  type="button"
+                  className={filters.targets_only === val ? "on" : ""}
+                  onClick={() => { setFilters((f) => ({ ...f, targets_only: val })); setPage(1); }}
                 >
                   {label}
                 </button>
