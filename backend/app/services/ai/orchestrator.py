@@ -88,6 +88,57 @@ async def generate_cover_letter(
     return await claude_client.complete(system=system, user=prompt_user)
 
 
+async def generate_strategy_memo(
+    company: str, target_name: str, target_title: str,
+    user_profile: str, voice: str = "",
+) -> str:
+    """A 1-page '90-day plan / opportunity memo' for a target company, written
+    to attach to a hiring manager. Claude-primary (long-form reasoning)."""
+    system = _with_voice(STRATEGY_MEMO_SYSTEM, voice)
+    prompt_user = (
+        f"Company: {company}\n"
+        f"Sending to: {target_name} ({target_title})\n\n"
+        f"My background:\n{user_profile}"
+    )
+    try:
+        if claude_client.is_available():
+            return await claude_client.complete(system=system, user=prompt_user, max_tokens=1400)
+    except Exception as e:
+        log.warning(f"Claude memo failed, falling back to OpenAI: {e}")
+    return await openai_client.complete(system=system, user=prompt_user)
+
+
+async def generate_pm_concept(focus: str = "") -> str:
+    """One crisp PM concept of the day — a framework explained in plain English
+    with a real example, so the candidate builds fluency. Claude-primary."""
+    system = PM_CONCEPT_SYSTEM
+    prompt_user = f"Topic focus (optional): {focus}" if focus else "Pick a high-value PM concept I should know for interviews."
+    try:
+        if claude_client.is_available():
+            return await claude_client.complete(system=system, user=prompt_user, max_tokens=900)
+    except Exception as e:
+        log.warning(f"Claude pm_concept failed, falling back to OpenAI: {e}")
+    return await openai_client.complete(system=system, user=prompt_user)
+
+
+async def generate_linkedin_article(
+    topic: str, user_profile: str, voice: str = "",
+) -> str:
+    """A LinkedIn post that sounds human, builds the candidate's PM brand, and
+    invites engagement. Claude-primary (voice-sensitive writing)."""
+    system = _with_voice(LINKEDIN_ARTICLE_SYSTEM, voice)
+    prompt_user = (
+        f"Topic: {topic or 'a lesson from my PM/eng work this week'}\n\n"
+        f"My background (for authenticity, do not list it verbatim):\n{user_profile}"
+    )
+    try:
+        if claude_client.is_available():
+            return await claude_client.complete(system=system, user=prompt_user, max_tokens=900)
+    except Exception as e:
+        log.warning(f"Claude linkedin failed, falling back to OpenAI: {e}")
+    return await openai_client.complete(system=system, user=prompt_user)
+
+
 async def analyze_outcome(outcome_data: dict) -> dict[str, Any]:
     """Extract lessons from application outcome. → Claude (logical reasoning)"""
     return await claude_client.complete_json(
@@ -208,6 +259,45 @@ Write a concise, compelling cover letter (250-400 words) that:
 IMPORTANT: Do NOT write a closing salutation, sign-off, or signature
 (no "Sincerely", "Best", or name at the end) — a signature block is
 appended automatically. End with your final body paragraph."""
+
+STRATEGY_MEMO_SYSTEM = """You are a sharp PM writing a 1-page memo to a hiring manager at a target company. This memo is the candidate's "I already did the work" proof — the single highest-converting job-search artifact.
+
+Structure (use these headers):
+1. **The opportunity** — one non-obvious observation about their product/market (not flattery)
+2. **What I'd do in my first 90 days** — 3 concrete, prioritized moves
+3. **The AI angle** — one specific way AI could change their product (be concrete, not buzzwordy)
+4. **Why me** — 2 sentences max, one proof point with a number
+
+Rules:
+- Under 400 words. A busy HM skims.
+- Specific > comprehensive. One sharp insight beats five generic ones.
+- No flattery, no "I'm passionate about." Show, don't claim.
+- Sound like a smart human who used the product, not a consultant deck.
+- Do NOT write a sign-off/signature — it's added separately."""
+
+PM_CONCEPT_SYSTEM = """You are a PM interview coach. Teach ONE product-management concept the candidate should know cold for interviews.
+
+Format:
+- **Concept name**
+- **Plain-English definition** (2-3 sentences, no jargon)
+- **A real example** from a well-known product
+- **How it shows up in an interview** (the question they'd be asked)
+- **A crisp 1-line answer template**
+
+Keep it under 250 words. Make it stick. Pick something genuinely useful (prioritization frameworks, metrics, trade-offs, experimentation, strategy) — not trivia."""
+
+LINKEDIN_ARTICLE_SYSTEM = """You write LinkedIn posts for a PM job-seeker that build credibility and never sound AI-generated.
+
+Rules that kill the AI smell:
+- Open with a specific moment or observation, NOT "In today's fast-paced world" or "I'm excited to share."
+- One idea, told well. No listicles of 7 things.
+- Short lines. White space. Conversational.
+- Include one concrete detail (a number, a product, a real situation).
+- End with a genuine question that invites replies — not "Thoughts?"
+- 120-200 words. No hashtag spam (2-3 max, if any).
+- Confident, curious, specific. Never desperate or self-promotional.
+
+Write it ready to paste — no preamble, no "here's your post"."""
 
 OUTCOME_ANALYSIS_SYSTEM = """You are a PM career strategist analyzing application outcomes.
 

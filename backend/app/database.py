@@ -689,6 +689,47 @@ async def get_queued_job_ids() -> set[int]:
     return {r["job_id"] for r in resp.data or [] if r.get("job_id")}
 
 
+async def get_task_log(period: str, cadence: str = "daily") -> dict[str, dict]:
+    """Return {task_key: row} for a given period (date string) + cadence."""
+    db = get_db()
+    resp = (
+        db.table("task_log")
+        .select("*")
+        .eq("period", period)
+        .eq("cadence", cadence)
+        .execute()
+    )
+    return {r["task_key"]: r for r in resp.data or []}
+
+
+async def set_task(task_key: str, cadence: str, period: str, done: bool, notes: str = "") -> None:
+    """Tick/untick a checklist item (upsert on task_key+period)."""
+    db = get_db()
+    db.table("task_log").upsert(
+        {"task_key": task_key, "cadence": cadence, "period": period,
+         "done": done, "notes": notes},
+        on_conflict="task_key,period",
+    ).execute()
+
+
+async def save_artifact(kind: str, body: str, title: str = "", company: str = "",
+                        target_name: str = "", target_url: str = "") -> int:
+    db = get_db()
+    resp = db.table("artifacts").insert({
+        "kind": kind, "body": body, "title": title, "company": company,
+        "target_name": target_name, "target_url": target_url,
+    }).execute()
+    return resp.data[0]["id"] if resp.data else 0
+
+
+async def get_artifacts(kind: str | None = None, limit: int = 30) -> list[dict]:
+    db = get_db()
+    q = db.table("artifacts").select("*").order("created_at", desc=True).limit(limit)
+    if kind:
+        q = q.eq("kind", kind)
+    return q.execute().data or []
+
+
 async def get_queued_companies() -> set[str]:
     """Companies with an open (queued/filled) Night Shift item — used to keep
     the one-per-company guardrail across runs and slug variants."""
