@@ -459,8 +459,11 @@ class WorkerSettings:
         # ── JOBS: 6x/day (every 4h) — 200+ fresh jobs/day ──
         cron(run_scrape_all, hour={0, 4, 8, 12, 16, 20}, minute=30),
 
-        # ── AUTO-APPLY: 4x/day ──
-        cron(run_auto_apply, hour={1, 7, 13, 19}, minute=45),
+        # ── AUTO-APPLY: DISABLED — the old API-submit path always 401s (ATS
+        #    public APIs are read-only). Replaced by Night Shift (browser
+        #    automation, user-triggered). run_auto_apply kept in `functions`
+        #    for manual/legacy calls but no longer cron-scheduled. ──
+        # cron(run_auto_apply, hour={1, 7, 13, 19}, minute=45),
 
         # ── HEALTH CHECK: 2x/day ──
         cron(run_health_check, hour={6, 18}, minute=30),

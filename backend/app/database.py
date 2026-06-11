@@ -689,6 +689,19 @@ async def get_queued_job_ids() -> set[int]:
     return {r["job_id"] for r in resp.data or [] if r.get("job_id")}
 
 
+async def get_queued_companies() -> set[str]:
+    """Companies with an open (queued/filled) Night Shift item — used to keep
+    the one-per-company guardrail across runs and slug variants."""
+    db = get_db()
+    resp = (
+        db.table("night_shift_queue")
+        .select("company")
+        .in_("status", ["queued", "filled"])
+        .execute()
+    )
+    return {r["company"] for r in resp.data or [] if r.get("company")}
+
+
 async def enqueue_night_shift(item: dict) -> int:
     """Add one job to the Night Shift review queue. Best-effort; the unique
     partial index (job_id where status in queued/filled) prevents duplicates."""

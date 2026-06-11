@@ -15,12 +15,26 @@ decides WHICH jobs Night Shift should work on tonight, applying every guardrail:
 The actual submission is always human-reviewed (fill-and-park).
 """
 
+import re
 from pathlib import Path
 
 from app.config import get_settings
 from app.logger import log
 from app.services.role_classifier import classify_role, get_resume_tag_for_role
 from app.services.night_shift_config import night_shift_eligible, is_tier_1
+
+
+def _company_key(name: str) -> str:
+    """Canonical company key for the one-per-company guardrail.
+
+    Company slugs in `jobs` are inconsistent — the same employer appears as
+    'notion', 'Notion', and 'notion2' (duplicate ATS board configs). A plain
+    lower() treats those as different companies and queues duplicate
+    applications. Normalize: lowercase, strip non-alphanumerics, strip
+    trailing digits ('notion2' → 'notion').
+    """
+    n = re.sub(r"[^a-z0-9]", "", (name or "").lower())
+    return re.sub(r"\d+$", "", n)
 
 
 async def select_for_night_shift(dry_run: bool = False) -> dict:
@@ -72,7 +86,11 @@ async def select_for_night_shift(dry_run: bool = False) -> dict:
     )
 
     selected: list[dict] = []
-    seen_companies: set[str] = set()
+    # Seed with companies already open in the queue so re-runs can't queue a
+    # second application to the same employer under a variant slug.
+    seen_companies: set[str] = {
+        _company_key(c) for c in await db.get_queued_companies()
+    }
     blocked_tier1 = 0
     skipped_not_tier2 = 0
     skipped_role = 0
@@ -96,8 +114,8 @@ async def select_for_night_shift(dry_run: bool = False) -> dict:
             skipped_role += 1
             continue
 
-        # ── Guardrail 7: one per company ──────────────────────────────────────
-        ckey = company.lower()
+        # ── Guardrail 7: one per company (normalized — 'notion2' == 'notion') ─
+        ckey = _company_key(company)
         if ckey in seen_companies:
             continue
 
@@ -163,13 +181,19 @@ async def select_for_night_shift(dry_run: bool = False) -> dict:
 
 def _pick_resume_id(role: str, resumes: list[dict]) -> int | None:
     """Pick a role-matched resume id (or default). File resolution is the
-    extension's concern; here we only record which resume to use."""
-    if not resumes:
+    extension's concern; here we only record which resume to use.
+
+    Only considers resumes with a storage_path — rows without one predate the
+    Supabase Storage fix and their files were lost to the /tmp wipe, so
+    pointing Night Shift at them would mean attaching a file that's gone.
+    """
+    usable = [r for r in resumes if r.get("storage_path")]
+    if not usable:
         return None
     tag = get_resume_tag_for_role(role)
-    for r in resumes:
+    for r in usable:
         tags = [t.strip().lower() for t in (r.get("role_tags") or "").split(",")]
         if tag in tags or role in tags:
             return r["id"]
-    default = next((r for r in resumes if r.get("is_default")), None)
-    return default["id"] if default else resumes[0]["id"]
+    default = next((r for r in usable if r.get("is_default")), None)
+    return default["id"] if default else usable[0]["id"]

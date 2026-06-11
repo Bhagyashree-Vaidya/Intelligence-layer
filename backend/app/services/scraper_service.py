@@ -27,6 +27,12 @@ import httpx
 CONFIG_FILE = Path(__file__).parent.parent / "data" / "company_config.json"
 SLUGS_FILE = Path(__file__).parent.parent.parent.parent / "company_slugs.txt"
 
+# ⚠️ DUPLICATION (intentional, do NOT blindly sync): this ROLE_FILTERS is a
+# SEPARATE, narrower copy of role_classifier.ROLE_PATTERNS. They have already
+# diverged on purpose — this scrape-time filter is intentionally tighter (no
+# 'hw', fewer swe/tpm/ux patterns) to keep the scrape lean. role_classifier is
+# the broader source of truth used for classification/Night Shift. Changing one
+# does NOT change the other; reconcile deliberately, never mechanically.
 ROLE_FILTERS = {
     "pm": [
         r"\bproduct\s+manager\b", r"\btechnical\s+product\s+manager\b",
