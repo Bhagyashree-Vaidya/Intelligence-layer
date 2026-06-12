@@ -384,8 +384,40 @@ async def run_daily_health_email(ctx: dict) -> dict:
     except Exception:
         pass
 
+    # Apify credit check — credits exhaust silently mid-cycle and kill the
+    # signal scans with no error anywhere visible (found 2026-06-12: credits
+    # ran out and the user only noticed by logging into the Apify console).
+    apify_line = "n/a"
+    apify_flag = None
+    try:
+        import httpx
+        from app.config import get_settings as _gs
+        _s = _gs()
+        if _s.apify_token:
+            async with httpx.AsyncClient(timeout=10) as client:
+                resp = await client.get(
+                    "https://api.apify.com/v2/users/me/limits",
+                    headers={"Authorization": f"Bearer {_s.apify_token}"},
+                )
+                if resp.status_code == 200:
+                    d = resp.json().get("data", {})
+                    used = (d.get("current") or {}).get("monthlyUsageUsd")
+                    cap = (d.get("limits") or {}).get("maxMonthlyUsageUsd")
+                    if used is not None and cap:
+                        pct = round(100 * used / cap, 1)
+                        apify_line = f"${used:.2f} / ${cap:.2f} ({pct}%)"
+                        if pct >= 100:
+                            apify_flag = (f"APIFY CREDITS EXHAUSTED ({apify_line}) — "
+                                          "signal scans are DEAD until cycle resets or upgrade")
+                        elif pct >= 80:
+                            apify_flag = f"Apify credits {pct}% used ({apify_line}) — scans stop at 100%"
+    except Exception as e:
+        log.warning(f"Daily email: Apify credit check failed: {e}")
+
     # Flags — anything wrong
     flags = []
+    if apify_flag:
+        flags.append(apify_flag)
     if new_gaps:
         flags.append(f"REGRESSION: lost coverage → {', '.join(sorted(new_gaps))}")
     if coverage_pct < 80:
@@ -406,6 +438,7 @@ async def run_daily_health_email(ctx: dict) -> dict:
         f"Coverage:          {covered}/{len(TARGET_COMPANIES)} companies ({coverage_pct}%)\n"
         f"Unscored backlog:  {backlog}\n"
         f"Last scrape:       {hours_since}h ago\n"
+        f"Apify credits:     {apify_line}\n"
         f"Companies at 0:    {', '.join(zero) if zero else 'none'}\n"
         + (f"Newly fixed:       {', '.join(sorted(fixed))}\n" if fixed else "")
         + "\n"
