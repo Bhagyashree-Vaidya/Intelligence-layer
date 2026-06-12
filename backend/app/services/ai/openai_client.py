@@ -24,10 +24,23 @@ def _get_client() -> openai.AsyncOpenAI:
     return _client
 
 
+# Top GPT model for all content generation (user request 2026-06-12).
+# GPT-5-family models reject `max_tokens` (use `max_completion_tokens`) and
+# only support default temperature — _completion_params handles both families
+# so a model swap can't silently break calls into the Claude fallback.
+DEFAULT_MODEL = "gpt-5.1"
+
+
+def _completion_params(model: str, max_tokens: int, temperature: float) -> dict:
+    if model.startswith(("gpt-5", "o1", "o3", "o4")):
+        return {"max_completion_tokens": max_tokens}
+    return {"max_tokens": max_tokens, "temperature": temperature}
+
+
 async def complete_json(
     system: str,
     user: str,
-    model: str = "gpt-4o-mini",
+    model: str = DEFAULT_MODEL,
     max_tokens: int = 4096,
     temperature: float = 0.2,
 ) -> dict[str, Any]:
@@ -35,13 +48,12 @@ async def complete_json(
     client = _get_client()
     response = await client.chat.completions.create(
         model=model,
-        max_tokens=max_tokens,
-        temperature=temperature,
         response_format={"type": "json_object"},
         messages=[
             {"role": "system", "content": system},
             {"role": "user", "content": user},
         ],
+        **_completion_params(model, max_tokens, temperature),
     )
     text = response.choices[0].message.content or "{}"
     try:
@@ -54,7 +66,7 @@ async def complete_json(
 async def complete(
     system: str,
     user: str,
-    model: str = "gpt-4o-mini",
+    model: str = DEFAULT_MODEL,
     max_tokens: int = 4096,
     temperature: float = 0.3,
 ) -> str:
@@ -62,12 +74,11 @@ async def complete(
     client = _get_client()
     response = await client.chat.completions.create(
         model=model,
-        max_tokens=max_tokens,
-        temperature=temperature,
         messages=[
             {"role": "system", "content": system},
             {"role": "user", "content": user},
         ],
+        **_completion_params(model, max_tokens, temperature),
     )
     return response.choices[0].message.content or ""
 
