@@ -281,7 +281,7 @@ async def normalize_job_dates() -> int:
 async def search_jobs(
     query: str = "", company: str = "", location: str = "", role: str = "",
     freshness: str = "", sort: str = "relevancy", page: int = 1, per_page: int = 40,
-    targets_only: bool = False,
+    targets_only: bool = False, pm_program_only: bool = False,
 ) -> tuple[list[dict], int]:
     db = get_db()
     q = db.table("jobs").select("*", count="exact")
@@ -294,6 +294,10 @@ async def search_jobs(
         from app.services.night_shift_config import TARGET_KEYWORDS
         ors = ",".join(f"company.ilike.%{kw}%" for kw in TARGET_KEYWORDS)
         q = q.or_(ors)
+    if pm_program_only:
+        # "Top 70" tab: only Product / Program roles. Separate or= group is
+        # AND-ed with targets_only by PostgREST.
+        q = q.or_("title.ilike.%product%,title.ilike.%program%")
     if company:
         q = q.ilike("company", f"%{company}%")
     if location:

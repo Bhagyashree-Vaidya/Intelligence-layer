@@ -6,7 +6,7 @@ import { MatchRing } from "@/components/MatchRing";
 
 export default function Dashboard() {
   const [data, setData] = useState<JobsResponse | null>(null);
-  const [filters, setFilters] = useState({ q: "", company: "", location: "", role: "", freshness: "", sort: "relevancy", targets_only: "" });
+  const [filters, setFilters] = useState({ q: "", company: "", location: "", role: "", freshness: "", sort: "relevancy", targets_only: "", pm_program_only: "" });
   const [page, setPage] = useState(1);
   const [scraping, setScraping] = useState(false);
   const [scrapeMsg, setScrapeMsg] = useState("");
@@ -52,6 +52,7 @@ export default function Dashboard() {
       freshness: filters.freshness,
       sort: filters.sort,
       targets_only: filters.targets_only,
+      pm_program_only: filters.pm_program_only,
     });
     setPage(1);
   };
@@ -157,16 +158,23 @@ export default function Dashboard() {
           <div style={{ display: "flex", alignItems: "center", gap: 14, marginLeft: "auto" }}>
             <span className="jp-eyebrow">Scope</span>
             <div className="jp-seg">
-              {[["", "All jobs"], ["true", "★ My Targets"]].map(([val, label]) => (
-                <button
-                  key={val}
-                  type="button"
-                  className={filters.targets_only === val ? "on" : ""}
-                  onClick={() => { setFilters((f) => ({ ...f, targets_only: val })); setPage(1); }}
-                >
-                  {label}
-                </button>
-              ))}
+              {([
+                { key: "all", label: "All jobs", targets: "", pm: "" },
+                { key: "targets", label: "★ My Targets", targets: "true", pm: "" },
+                { key: "top70", label: "🎯 Top 70 (PM/Program)", targets: "true", pm: "true" },
+              ] as const).map((opt) => {
+                const active = filters.targets_only === opt.targets && filters.pm_program_only === opt.pm;
+                return (
+                  <button
+                    key={opt.key}
+                    type="button"
+                    className={active ? "on" : ""}
+                    onClick={() => { setFilters((f) => ({ ...f, targets_only: opt.targets, pm_program_only: opt.pm })); setPage(1); }}
+                  >
+                    {opt.label}
+                  </button>
+                );
+              })}
             </div>
           </div>
         </div>
