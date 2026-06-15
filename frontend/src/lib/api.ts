@@ -372,3 +372,33 @@ export function generatePmConcept(focus = ""): Promise<{ id: number; concept: st
 export function generateArticle(topic = ""): Promise<{ id: number; article: string }> {
   return request("/api/tasks/generate/article", { method: "POST", body: JSON.stringify({ topic }) });
 }
+
+// ── Referrals ────────────────────────────────────────────────────────────────
+
+export interface ReferralPerson {
+  id: number;
+  name: string;
+  title: string;
+  company: string;
+  linkedin_url: string;
+  relationship_type: string;
+  is_relevant: boolean;
+  outreach_message: string;
+  outreach_status: string;
+  latest_role_mentioned: string;
+}
+
+export interface ReferralGroup {
+  company: string;
+  count: number;
+  warm: number;
+  people: ReferralPerson[];
+}
+
+export function getReferrals(): Promise<{ groups: ReferralGroup[]; companies: number; total_people: number }> {
+  return request("/api/referrals");
+}
+
+export function generateReferralOutreach(contactId: number): Promise<{ outreach_message: string }> {
+  return request(`/api/referrals/${contactId}/outreach`, { method: "POST" });
+}
