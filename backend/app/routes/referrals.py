@@ -73,6 +73,22 @@ async def list_referrals():
     return {"groups": out, "companies": len(out), "total_people": total_people}
 
 
+@router.post("/discover")
+async def discover_people(body: dict | None = None):
+    """Run cookieless Apify people-discovery for the Top 70 (or a subset).
+
+    Body (optional):
+      - companies: list[str]  — limit to these companies (default: all 70)
+    Cost: ~$0.001/result via fabri-lab/linkedin-public-search-lead-extractor.
+    All 70 ≈ ~$3-5. Needs Apify credit; returns an error if the token has none.
+    """
+    from app.services.people_discovery import run_people_discovery
+    body = body or {}
+    companies = body.get("companies")
+    result = await run_people_discovery(companies=companies)
+    return result
+
+
 @router.post("/{contact_id}/outreach")
 async def referral_outreach(contact_id: int):
     """Draft a referral outreach message (user's voice) for one contact."""

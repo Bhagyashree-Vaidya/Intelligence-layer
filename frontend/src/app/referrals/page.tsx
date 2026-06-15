@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { getReferrals, generateReferralOutreach, type ReferralGroup } from "@/lib/api";
+import { getReferrals, generateReferralOutreach, discoverPeople, type ReferralGroup } from "@/lib/api";
 
 const REL_LABEL: Record<string, string> = {
   hiring_manager: "Hiring Manager",
@@ -18,6 +18,24 @@ export default function ReferralsPage() {
   const [loading, setLoading] = useState(true);
   const [drafts, setDrafts] = useState<Record<number, string>>({});
   const [busy, setBusy] = useState<number | null>(null);
+  const [discovering, setDiscovering] = useState(false);
+  const [discoverMsg, setDiscoverMsg] = useState("");
+
+  const discover = async () => {
+    setDiscovering(true);
+    setDiscoverMsg("Finding hiring managers, UW alumni & team seniors across your 70… (~1-2 min)");
+    try {
+      const r = await discoverPeople();
+      setDiscoverMsg(r.success
+        ? `Done — found ${r.discovered} people across ${r.companies} companies.`
+        : `Couldn't run: ${r.error}. (Add Apify credit, then retry.)`);
+      refresh();
+    } catch (e: any) {
+      setDiscoverMsg(`Error: ${e.message}`);
+    } finally {
+      setDiscovering(false);
+    }
+  };
 
   const refresh = useCallback(() => {
     getReferrals()
@@ -48,8 +66,13 @@ export default function ReferralsPage() {
         </p>
       </div>
 
-      <div className="jp-mute" style={{ fontSize: 13, marginBottom: 20 }}>
-        {loading ? "Loading…" : `${meta.total_people} contacts across ${meta.companies} target companies`}
+      <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 20 }}>
+        <button className="jp-btn jp-primary" onClick={discover} disabled={discovering}>
+          {discovering ? "Finding people…" : "🔎 Find people (all 70)"}
+        </button>
+        <span className="jp-mute" style={{ fontSize: 13 }}>
+          {discoverMsg || (loading ? "Loading…" : `${meta.total_people} contacts across ${meta.companies} target companies`)}
+        </span>
       </div>
 
       {!loading && meta.total_people === 0 && (

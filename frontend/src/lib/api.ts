@@ -402,3 +402,12 @@ export function getReferrals(): Promise<{ groups: ReferralGroup[]; companies: nu
 export function generateReferralOutreach(contactId: number): Promise<{ outreach_message: string }> {
   return request(`/api/referrals/${contactId}/outreach`, { method: "POST" });
 }
+
+export function discoverPeople(companies?: string[]): Promise<{
+  success: boolean; companies?: number; discovered?: number; upserted?: number; error?: string;
+}> {
+  return request("/api/referrals/discover", {
+    method: "POST",
+    body: JSON.stringify(companies ? { companies } : {}),
+  });
+}
