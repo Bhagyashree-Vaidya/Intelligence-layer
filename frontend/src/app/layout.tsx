@@ -1,5 +1,6 @@
 import "./globals.css";
 import { Sidebar } from "@/components/Sidebar";
+import { PasswordGate } from "@/components/PasswordGate";
 
 export const metadata = {
   title: "JobPilot",
@@ -24,10 +25,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         `}</style>
       </head>
       <body className="jp-app">
-        <div className="jp-shell">
-          <Sidebar />
-          <main className="jp-main">{children}</main>
-        </div>
+        <PasswordGate>
+          <div className="jp-shell">
+            <Sidebar />
+            <main className="jp-main">{children}</main>
+          </div>
+        </PasswordGate>
       </body>
     </html>
   );
