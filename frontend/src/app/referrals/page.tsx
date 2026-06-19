@@ -113,7 +113,8 @@ export default function ReferralsPage() {
                       readOnly
                       value={drafts[p.id] || p.outreach_message}
                       style={{ width: "100%", marginTop: 8, minHeight: 90, fontSize: 13, padding: 10,
-                        background: "var(--jp-bg2,#1a1a1f)", color: "inherit", border: "1px solid var(--jp-line,#2a2a30)", borderRadius: 8 }}
+                        background: "#ffffff", color: "#111827", border: "1px solid #d1d5db",
+                        borderRadius: 8, lineHeight: 1.5, fontFamily: "inherit" }}
                     />
                   )}
                 </div>
