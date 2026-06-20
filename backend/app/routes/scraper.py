@@ -262,7 +262,8 @@ async def start_full_scrape(body: dict | None = None):
                 if get_settings().theirstack_api_key:
                     scrape_status["progress"] = "Fetching gap companies (TheirStack)..."
                     await _broadcast(scrape_status)
-                    ts = await run_theirstack_fill(max_age_days=7,
+                    # 24h freshness — avoid stale/closed listings (dead links).
+                    ts = await run_theirstack_fill(max_age_days=1,
                                                    discovered_max_age_days=2, cap=8)
                     total_jobs += ts.get("jobs_upserted", 0)
             except Exception as e:
