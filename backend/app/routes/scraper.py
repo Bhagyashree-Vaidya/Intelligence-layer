@@ -5,6 +5,7 @@ import asyncio
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from app import database as db
+from app.config import get_settings
 from app.services import scraper_service as scraper
 from app.services import bigtech_scrapers as bigtech
 from app.services import apify_service as apify
@@ -251,7 +252,24 @@ async def start_full_scrape(body: dict | None = None):
                 errors.append(f"Apify: {e}")
                 log.error(f"Apify scrape error: {e}")
 
-            # 4. Rescore (incremental — only newly scraped/unscored jobs)
+            # 4. TheirStack — gap companies (Adobe, Capital One, Cisco, etc.)
+            #    that ATS/BigTech/Apify can't reach. Costs ~1 credit/job, so we
+            #    use a tight discovered-window (2 days) → repeat fetches only pay
+            #    for genuinely-new postings. NOT in the 6x/day cron (too costly);
+            #    only here in the manual "Fetch new jobs".
+            try:
+                from app.services.theirstack_service import run_theirstack_fill
+                if get_settings().theirstack_api_key:
+                    scrape_status["progress"] = "Fetching gap companies (TheirStack)..."
+                    await _broadcast(scrape_status)
+                    ts = await run_theirstack_fill(max_age_days=7,
+                                                   discovered_max_age_days=2, cap=8)
+                    total_jobs += ts.get("jobs_upserted", 0)
+            except Exception as e:
+                errors.append(f"TheirStack: {e}")
+                log.error(f"TheirStack scrape error: {e}")
+
+            # 5. Rescore (incremental — only newly scraped/unscored jobs)
             scrape_status["progress"] = "Scoring relevancy..."
             await _broadcast(scrape_status)
             profile = await db.get_profile()

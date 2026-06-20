@@ -55,8 +55,13 @@ def _map_job(j: dict, company: str) -> dict | None:
 
 
 async def fetch_company_jobs(company: str, token: str, max_age_days: int = 7,
-                             cap: int = PER_COMPANY_CAP) -> list[dict]:
-    """Fetch recent US Product/Program jobs for one company from TheirStack."""
+                             cap: int = PER_COMPANY_CAP,
+                             discovered_max_age_days: int | None = None) -> list[dict]:
+    """Fetch recent US Product/Program jobs for one company from TheirStack.
+
+    discovered_max_age_days: if set, only return jobs TheirStack *discovered*
+    that recently — keeps repeat 'Fetch new jobs' clicks cheap (1 credit/job,
+    and we only pay for genuinely-new postings)."""
     payload = {
         "company_name_case_insensitive_or": [company],
         "job_title_or": JOB_TITLES,
@@ -65,6 +70,8 @@ async def fetch_company_jobs(company: str, token: str, max_age_days: int = 7,
         "limit": cap,
         "include_total_results": False,
     }
+    if discovered_max_age_days is not None:
+        payload["discovered_at_max_age_days"] = discovered_max_age_days
     headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
     async with httpx.AsyncClient(timeout=60) as client:
         resp = await client.post(API_URL, json=payload, headers=headers)
@@ -76,9 +83,12 @@ async def fetch_company_jobs(company: str, token: str, max_age_days: int = 7,
 
 
 async def run_theirstack_fill(companies: list[str] | None = None,
-                              max_age_days: int = 7) -> dict:
+                              max_age_days: int = 7,
+                              discovered_max_age_days: int | None = None,
+                              cap: int = PER_COMPANY_CAP) -> dict:
     """Fetch + upsert gap-company jobs. Returns a summary. Credit cost ≈ total
-    jobs returned."""
+    jobs returned (so pass discovered_max_age_days on recurring runs to stay
+    cheap)."""
     from app import database as db
 
     settings = get_settings()
@@ -92,7 +102,10 @@ async def run_theirstack_fill(companies: list[str] | None = None,
     errors = []
     for company in targets:
         try:
-            rows = await fetch_company_jobs(company, token, max_age_days=max_age_days)
+            rows = await fetch_company_jobs(
+                company, token, max_age_days=max_age_days, cap=cap,
+                discovered_max_age_days=discovered_max_age_days,
+            )
             if rows:
                 await db.upsert_jobs(rows)
             per_company[company] = len(rows)
