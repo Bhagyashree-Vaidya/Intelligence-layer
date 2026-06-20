@@ -45,18 +45,57 @@ def _with_voice(base_system: str, voice: str) -> str:
     return base_system
 
 
+_NO_FABRICATION_OVERRIDE = """
+
+═══ CRITICAL OVERRIDE — NO SOURCE MATERIAL ═══
+You have NO record of anything this person has said, posted, presented, or
+believes. You do NOT have their posts, talks, or quotes. Therefore:
+- NEVER invent or attribute a quote, opinion, talk, article, or "I saw that you
+  said / your post on …". Fabricating a specific they never said will be
+  obvious to them and instantly destroys credibility. This is the #1 rule.
+- For the Observation, you MAY reference the COMPANY's real, widely-known public
+  direction in a clearly hedged way ("It looks like [Company] is leaning into
+  …") — never attributed to this individual.
+- Put this literal placeholder exactly where the personal hook belongs, on its
+  own line:
+  [← add ONE real, specific thing THEY said/posted — 10s on their LinkedIn]
+- Everything else (credibility, the question, the ask) should be fully written
+  in voice and ready to send.
+Handing the user a fill-in-the-blank is REQUIRED. Inventing a detail is NOT
+acceptable under any circumstance."""
+
+
 async def generate_outreach(
     post_content: str, author_name: str, author_title: str,
     role_mentioned: str, user_profile: str, voice: str = "",
+    grounded: bool = True,
 ) -> str:
     """Generate personalized outreach message. → OpenAI (creative writing).
-    Falls back to Claude if OpenAI is unavailable."""
+    Falls back to Claude if OpenAI is unavailable.
+
+    grounded=True  → post_content is REAL source material (e.g. their actual
+                     LinkedIn hiring post); the model may reference it.
+    grounded=False → we have NO real material about this person; the model MUST
+                     NOT invent quotes and instead leaves a placeholder for the
+                     user to add one true detail. Use for discovered referral
+                     contacts (name/title/company only)."""
     system = _with_voice(OUTREACH_SYSTEM, voice)
-    prompt_user = (
-        f"Hiring post by {author_name} ({author_title}):\n{post_content}\n\n"
-        f"Role mentioned: {role_mentioned}\n\n"
-        f"My background:\n{user_profile}"
-    )
+    if not grounded:
+        system = system + _NO_FABRICATION_OVERRIDE
+        prompt_user = (
+            f"Person: {author_name} ({author_title}).\n"
+            f"Context (NOT their words — do not quote it):\n{post_content}\n\n"
+            f"Possible role of interest: {role_mentioned}\n\n"
+            f"My background:\n{user_profile}\n\n"
+            f"Remember: you have NO record of what this person actually said. "
+            f"Do not invent any quote or claim about them. Leave the placeholder."
+        )
+    else:
+        prompt_user = (
+            f"Hiring post by {author_name} ({author_title}):\n{post_content}\n\n"
+            f"Role mentioned: {role_mentioned}\n\n"
+            f"My background:\n{user_profile}"
+        )
     try:
         if openai_client.is_available():
             return await openai_client.complete(system=system, user=prompt_user)

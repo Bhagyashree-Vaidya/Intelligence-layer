@@ -121,13 +121,15 @@ async def referral_outreach(contact_id: int):
         f"Skills: {profile.get('skills','')}. "
         f"Experience: {profile.get('years_experience',0)} years."
     )
-    # Reuse the outreach generator. The 'post_content' slot carries context about
-    # why we're reaching this specific person at this company.
+    # Do we actually have real source material (their own post)? Discovered
+    # contacts have only name/title/company → grounded=False so the model can
+    # NOT fabricate a quote. Signal contacts with a real captured post can be
+    # grounded.
+    has_real_post = bool(c.get("latest_post_url")) and c.get("source") != "people_discovery"
     rel = c.get("relationship_type") or "contact"
     context = (
         f"Reaching out to a {rel} at {c.get('company','')}. "
-        f"Their role: {c.get('title','')}. "
-        f"Latest role they mentioned hiring for: {c.get('latest_role_mentioned','') or 'n/a'}."
+        f"Their role: {c.get('title','')}."
     )
     message = await orchestrator.generate_outreach(
         post_content=context,
@@ -136,6 +138,7 @@ async def referral_outreach(contact_id: int):
         role_mentioned=c.get("latest_role_mentioned", "") or "Product Manager",
         user_profile=user_summary,
         voice=profile.get("voice_instructions", "") or "",
+        grounded=has_real_post,
     )
     # Persist the draft.
     client.table("contacts").update({"outreach_message": message}).eq("id", contact_id).execute()
