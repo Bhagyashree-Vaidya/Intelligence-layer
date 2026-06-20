@@ -403,6 +403,13 @@ export function generateReferralOutreach(contactId: number): Promise<{ outreach_
   return request(`/api/referrals/${contactId}/outreach`, { method: "POST" });
 }
 
+export function markReferralSent(contactId: number, sent: boolean): Promise<{ ok: boolean; sent: boolean }> {
+  return request(`/api/referrals/${contactId}/sent`, {
+    method: "POST",
+    body: JSON.stringify({ sent }),
+  });
+}
+
 export function discoverPeople(companies?: string[]): Promise<{
   success: boolean; companies?: number; discovered?: number; upserted?: number; error?: string;
 }> {

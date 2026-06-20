@@ -89,6 +89,20 @@ async def discover_people(body: dict | None = None):
     return result
 
 
+@router.post("/{contact_id}/sent")
+async def mark_sent(contact_id: int, body: dict | None = None):
+    """Toggle whether outreach was sent to this contact (checkbox tracking)."""
+    from datetime import datetime, timezone
+    body = body or {}
+    sent = bool(body.get("sent", True))
+    client = db.get_db()
+    update = {"outreach_status": "sent" if sent else "none"}
+    if sent:
+        update["outreach_sent_at"] = datetime.now(timezone.utc).isoformat()
+    client.table("contacts").update(update).eq("id", contact_id).execute()
+    return {"ok": True, "sent": sent}
+
+
 @router.post("/{contact_id}/outreach")
 async def referral_outreach(contact_id: int):
     """Draft a referral outreach message (user's voice) for one contact."""

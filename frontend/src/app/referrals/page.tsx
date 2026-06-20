@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { getReferrals, generateReferralOutreach, discoverPeople, getNightShiftTiers, type ReferralGroup } from "@/lib/api";
+import { getReferrals, generateReferralOutreach, discoverPeople, getNightShiftTiers, markReferralSent, type ReferralGroup } from "@/lib/api";
 
 const REL_LABEL: Record<string, string> = {
   hiring_manager: "Hiring Manager",
@@ -20,6 +20,13 @@ export default function ReferralsPage() {
   const [busy, setBusy] = useState<number | null>(null);
   const [discovering, setDiscovering] = useState(false);
   const [discoverMsg, setDiscoverMsg] = useState("");
+  const [sentIds, setSentIds] = useState<Set<number>>(new Set());
+
+  const toggleSent = async (id: number, next: boolean) => {
+    setSentIds((s) => { const n = new Set(s); next ? n.add(id) : n.delete(id); return n; });
+    try { await markReferralSent(id, next); }
+    catch { setSentIds((s) => { const n = new Set(s); next ? n.delete(id) : n.add(id); return n; }); }
+  };
 
   const discover = async () => {
     setDiscovering(true);
@@ -53,7 +60,13 @@ export default function ReferralsPage() {
 
   const refresh = useCallback(() => {
     getReferrals()
-      .then((d) => { setGroups(d.groups); setMeta({ companies: d.companies, total_people: d.total_people }); })
+      .then((d) => {
+        setGroups(d.groups);
+        setMeta({ companies: d.companies, total_people: d.total_people });
+        const sent = new Set<number>();
+        d.groups.forEach((g) => g.people.forEach((p) => { if (p.outreach_status === "sent") sent.add(p.id); }));
+        setSentIds(sent);
+      })
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
@@ -109,7 +122,16 @@ export default function ReferralsPage() {
               {g.people.map((p) => (
                 <div key={p.id} style={{ borderTop: "1px solid var(--jp-line,#2a2a30)", paddingTop: 10 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                    <span style={{ fontWeight: 500 }}>{p.name}</span>
+                    <label title="Mark as contacted" style={{ display: "flex", alignItems: "center", cursor: "pointer" }}>
+                      <input
+                        type="checkbox"
+                        checked={sentIds.has(p.id)}
+                        onChange={(e) => toggleSent(p.id, e.target.checked)}
+                        style={{ width: 16, height: 16, cursor: "pointer", accentColor: "#7c3aed" }}
+                      />
+                    </label>
+                    <span style={{ fontWeight: 500, textDecoration: sentIds.has(p.id) ? "line-through" : "none", opacity: sentIds.has(p.id) ? 0.55 : 1 }}>{p.name}</span>
+                    {sentIds.has(p.id) && <span className="jp-chip jp-emerald" style={{ fontSize: 11 }}>sent</span>}
                     {p.relationship_type && (
                       <span className="jp-chip">{REL_LABEL[p.relationship_type] || p.relationship_type}</span>
                     )}
