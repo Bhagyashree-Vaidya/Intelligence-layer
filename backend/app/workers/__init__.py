@@ -486,8 +486,10 @@ class WorkerSettings:
     ]
 
     cron_jobs = [
-        # ── SIGNALS: 4x/day (every 6h) — company-targeted, 24h window (~$12/mo) ──
-        cron(run_signal_scan, hour={0, 6, 12, 18}, minute=15),
+        # ── SIGNALS: RETIRED (2026-06-19) — noisy inbound feed (leaked non-US /
+        #    non-PM); Referral covers targeted people better. Stopping the cron
+        #    frees ~$12/mo Apify. run_signal_scan kept for manual/legacy use.
+        # cron(run_signal_scan, hour={0, 6, 12, 18}, minute=15),
 
         # ── JOBS: 6x/day (every 4h) — 200+ fresh jobs/day ──
         cron(run_scrape_all, hour={0, 4, 8, 12, 16, 20}, minute=30),

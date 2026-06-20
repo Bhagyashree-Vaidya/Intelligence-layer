@@ -64,18 +64,6 @@ export function Sidebar() {
           <span className="count">{stats.jobs.toLocaleString()}</span>
         </Link>
 
-        <Link href="/signals" className={`jp-nav-item ${pathname === "/signals" ? "active" : ""}`}>
-          <span className="ic">
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M2 12h2m4 0h2m4 0h2m4 0h2" />
-              <path d="M6 8v8" />
-              <path d="M10 5v14" />
-              <path d="M14 8v8" />
-              <path d="M18 3v18" />
-            </svg>
-          </span>
-          <span>Signals</span>
-        </Link>
 
         <Link href="/applications" className={`jp-nav-item ${pathname === "/applications" ? "active" : ""}`}>
           <span className="ic">
