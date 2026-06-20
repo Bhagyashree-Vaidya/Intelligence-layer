@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { getReferrals, generateReferralOutreach, discoverPeople, type ReferralGroup } from "@/lib/api";
+import { getReferrals, generateReferralOutreach, discoverPeople, getNightShiftTiers, type ReferralGroup } from "@/lib/api";
 
 const REL_LABEL: Record<string, string> = {
   hiring_manager: "Hiring Manager",
@@ -23,15 +23,29 @@ export default function ReferralsPage() {
 
   const discover = async () => {
     setDiscovering(true);
-    setDiscoverMsg("Finding hiring managers, UW alumni & team seniors across your 70… (~1-2 min)");
+    setDiscoverMsg("Loading company list…");
     try {
-      const r = await discoverPeople();
-      setDiscoverMsg(r.success
-        ? `Done — found ${r.discovered} people across ${r.companies} companies.`
-        : `Couldn't run: ${r.error}. (Add Apify credit, then retry.)`);
+      // Get all 70 targets, then discover in small batches so no single request
+      // times out (all-70-at-once takes 10+ min and the gateway kills it).
+      const tiers = await getNightShiftTiers();
+      const companies = [...tiers.tier_1_never_apply, ...tiers.tier_2_eligible];
+      const BATCH = 3;
+      let found = 0, done = 0, failed = 0;
+      for (let i = 0; i < companies.length; i += BATCH) {
+        const batch = companies.slice(i, i + BATCH);
+        try {
+          const r = await discoverPeople(batch);
+          if (r.success) found += r.discovered || 0;
+          else failed += batch.length;
+        } catch { failed += batch.length; }
+        done = Math.min(i + BATCH, companies.length);
+        setDiscoverMsg(`Discovering… ${done}/${companies.length} companies · ${found} people found so far${failed ? ` · ${failed} failed` : ""}`);
+        refresh();   // live-fill the tab as batches complete
+      }
+      setDiscoverMsg(`Done — found ${found} people across ${companies.length} companies${failed ? ` (${failed} companies failed; retry to fill gaps)` : ""}.`);
       refresh();
     } catch (e: any) {
-      setDiscoverMsg(`Error: ${e.message}`);
+      setDiscoverMsg(`Error: ${e.message}. (Check Apify credit, then retry.)`);
     } finally {
       setDiscovering(false);
     }
