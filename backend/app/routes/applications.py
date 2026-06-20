@@ -48,6 +48,21 @@ async def track_application(job_id: int, body: dict | None = None):
     return {"ok": True, "id": app_id}
 
 
+@router.delete("/track/{job_id}")
+async def untrack_application(job_id: int):
+    """Un-apply: delete the application for this job (mis-click / didn't go
+    through). Removes the application + its events; count drops by 1."""
+    client = db.get_db()
+    apps = client.table("applications").select("id").eq("job_id", job_id).execute()
+    deleted = 0
+    for a in (apps.data or []):
+        client.table("application_events").delete().eq("app_id", a["id"]).execute()
+        client.table("applications").delete().eq("id", a["id"]).execute()
+        deleted += 1
+    log.info(f"Application un-tracked: job {job_id} ({deleted} removed)")
+    return {"ok": True, "deleted": deleted}
+
+
 @router.patch("/applications/{app_id}/status")
 async def update_status(app_id: int, body: dict):
     """Update an application's pipeline status."""

@@ -84,7 +84,7 @@ async def run_scrape_all(ctx: dict) -> dict:
 
     # 1. ATS platforms (Greenhouse, Lever, Ashby, etc.)
     try:
-        ats_jobs = await scraper.scrape_jobs(hours=1440)
+        ats_jobs = await scraper.scrape_jobs(hours=168)
         await db.upsert_jobs(ats_jobs)
         total += len(ats_jobs)
         log.info(f"Cron scrape: {len(ats_jobs)} ATS jobs")

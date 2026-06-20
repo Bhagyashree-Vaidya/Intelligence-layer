@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { getJobs, rescoreAll, startScrape, getScrapeStatus, generateMessage, generateCoverLetter, trackApplication, getApplications, type Job, type JobsResponse } from "@/lib/api";
+import { getJobs, rescoreAll, startScrape, getScrapeStatus, generateMessage, generateCoverLetter, trackApplication, untrackApplication, deleteJob, getApplications, type Job, type JobsResponse } from "@/lib/api";
 import { MatchRing } from "@/components/MatchRing";
 
 export default function Dashboard() {
@@ -85,8 +85,6 @@ export default function Dashboard() {
           <div style={{ display: "flex", gap: 12, marginRight: 12 }}>
             {[
               ["Applied", appStats.sent, "var(--jp-primary)"],
-              ["Interviews", appStats.interviews, "var(--jp-emerald)"],
-              ["Offers", appStats.offers, "#27ae60"],
             ].map(([label, val, color]) => (
               <div key={String(label)} style={{ textAlign: "center", padding: "4px 10px" }}>
                 <div style={{ fontSize: 20, fontWeight: 600, fontFamily: "var(--jp-mono)", color: String(color) }}>{val}</div>
@@ -143,7 +141,7 @@ export default function Dashboard() {
           <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
             <span className="jp-eyebrow">Sort</span>
             <div className="jp-seg">
-              {[["relevancy", "Match"], ["date", "Date"], ["company", "Company"]].map(([val, label]) => (
+              {[["relevancy", "Match"], ["date", "Date"]].map(([val, label]) => (
                 <button
                   key={val}
                   type="button"
@@ -197,6 +195,15 @@ export default function Dashboard() {
               setAppliedIds((prev) => new Set([...prev, job.id]));
               setAppStats((s) => ({ ...s, total: s.total + 1 }));
             }}
+            onUnapply={async () => {
+              await untrackApplication(job.id);
+              setAppliedIds((prev) => { const n = new Set(prev); n.delete(job.id); return n; });
+              setAppStats((s) => ({ ...s, sent: Math.max(0, s.sent - 1), total: Math.max(0, s.total - 1) }));
+            }}
+            onDelete={async () => {
+              await deleteJob(job.id);
+              setData((d) => d ? { ...d, jobs: d.jobs.filter((j) => j.id !== job.id), total: Math.max(0, d.total - 1) } : d);
+            }}
           />
         ))}
         {data && data.jobs.length === 0 && (
@@ -220,11 +227,13 @@ export default function Dashboard() {
   );
 }
 
-function JobCard({ job, isApplied, onApply, onSave }: {
+function JobCard({ job, isApplied, onApply, onSave, onUnapply, onDelete }: {
   job: Job;
   isApplied: boolean;
   onApply: () => Promise<void>;
   onSave: () => Promise<void>;
+  onUnapply: () => Promise<void>;
+  onDelete: () => Promise<void>;
 }) {
   const [applying, setApplying] = useState(false);
   const [coverLetter, setCoverLetter] = useState("");
@@ -300,9 +309,14 @@ function JobCard({ job, isApplied, onApply, onSave }: {
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
           <strong style={{ fontSize: 16, color: "var(--jp-ink)" }}>{job.title}</strong>
           {isApplied && (
-            <span className="jp-badge" style={{ fontSize: 12, padding: "4px 10px", background: "var(--jp-primary)", color: "#fff", borderRadius: 6 }}>
-              Applied
-            </span>
+            <button
+              onClick={onUnapply}
+              title="Click to undo — if you didn't actually apply (mis-click, tab closed, board error). Removes it and drops the count by 1."
+              className="jp-badge"
+              style={{ fontSize: 12, padding: "4px 10px", background: "var(--jp-primary)", color: "#fff", borderRadius: 6, border: "none", cursor: "pointer" }}
+            >
+              Applied ✕
+            </button>
           )}
           {job.freshness && (
             <span
@@ -342,6 +356,14 @@ function JobCard({ job, isApplied, onApply, onSave }: {
         )}
         <button className="jp-btn sm ghost" onClick={handleCoverLetter} disabled={clLoading} title="Generate a tailored cover letter">
           {clLoading ? "..." : "Cover Letter"}
+        </button>
+        <button
+          className="jp-btn sm ghost"
+          onClick={() => { if (confirm(`Delete "${job.title}" at ${job.company}? This removes it from your dashboard.`)) onDelete(); }}
+          title="Delete this irrelevant listing"
+          style={{ color: "var(--jp-rose, #e5484d)" }}
+        >
+          Delete
         </button>
         {job.url && (
           <button

@@ -84,7 +84,7 @@ async def start_ats_scrape(body: dict | None = None):
         return {"error": "Scrape already running"}, 409
 
     body = body or {}
-    hours = int(body.get("hours", 1440))
+    hours = int(body.get("hours", 168))
     roles = body.get("roles", "")
     role_keys = [r.strip() for r in roles.split(",") if r.strip()] or None
 
@@ -197,7 +197,7 @@ async def start_full_scrape(body: dict | None = None):
         return {"error": "Scrape already running"}, 409
 
     body = body or {}
-    hours = int(body.get("hours", 1440))
+    hours = int(body.get("hours", 168))
     roles = body.get("roles", "")
     role_keys = [r.strip() for r in roles.split(",") if r.strip()] or None
 
@@ -276,8 +276,21 @@ async def start_full_scrape(body: dict | None = None):
             profile = await db.get_profile()
             await db.rescore_all_jobs(profile, only_unscored=True)
 
+            # 6. Link-health — remove dead/closed listings (404/410), keep applied.
+            removed = 0
+            try:
+                from app.services.link_health import prune_dead_links
+                scrape_status["progress"] = "Checking job links (removing dead ones)..."
+                await _broadcast(scrape_status)
+                lh = await prune_dead_links()
+                removed = lh.get("removed", 0)
+            except Exception as e:
+                errors.append(f"LinkHealth: {e}")
+                log.error(f"Link-health error: {e}")
+
             err_str = f" (errors: {'; '.join(errors)})" if errors else ""
-            scrape_status["last_result"] = f"Done: {total_jobs} jobs scraped & scored{err_str}"
+            dead_str = f", {removed} dead links removed" if removed else ""
+            scrape_status["last_result"] = f"Done: {total_jobs} jobs scraped & scored{dead_str}{err_str}"
             log.info(scrape_status["last_result"])
         except Exception as e:
             scrape_status["last_result"] = f"Error: {e}"

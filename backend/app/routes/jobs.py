@@ -63,6 +63,15 @@ async def get_job(job_id: int):
     return job
 
 
+@router.delete("/jobs/{job_id}")
+async def delete_job(job_id: int):
+    """Manually delete an irrelevant job listing from the dashboard."""
+    client = db.get_db()
+    client.table("jobs").delete().eq("id", job_id).execute()
+    log.info(f"Job deleted manually: {job_id}")
+    return {"ok": True}
+
+
 @router.post("/rescore")
 async def rescore_all(only_unscored: bool = Query(False), max_batches: int | None = Query(None)):
     """Rescore jobs against the current profile.

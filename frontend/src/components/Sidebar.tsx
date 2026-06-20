@@ -65,17 +65,6 @@ export function Sidebar() {
         </Link>
 
 
-        <Link href="/applications" className={`jp-nav-item ${pathname === "/applications" ? "active" : ""}`}>
-          <span className="ic">
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M22 2 11 13" />
-              <path d="m22 2-7 20-4-9-9-4Z" />
-            </svg>
-          </span>
-          <span>Applied</span>
-          <span className="count">{stats.applications}</span>
-        </Link>
-
         <Link href="/referrals" className={`jp-nav-item ${pathname === "/referrals" ? "active" : ""}`}>
           <span className="ic">
             <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">

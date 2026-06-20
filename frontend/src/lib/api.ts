@@ -117,6 +117,14 @@ export function getApplications(status?: string) {
   return request<{ applications: any[]; stats: any }>(`/api/applications${qs}`);
 }
 
+export function untrackApplication(jobId: number) {
+  return request(`/api/track/${jobId}`, { method: "DELETE" });
+}
+
+export function deleteJob(jobId: number) {
+  return request(`/api/jobs/${jobId}`, { method: "DELETE" });
+}
+
 export function trackApplication(jobId: number, status = "applied") {
   return request(`/api/track/${jobId}`, {
     method: "POST",
