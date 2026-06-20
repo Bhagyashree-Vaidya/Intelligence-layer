@@ -52,6 +52,30 @@ async def scrape_progress():
     return scrape_status
 
 
+@router.post("/scrape/theirstack")
+async def scrape_theirstack(body: dict | None = None):
+    """Fill the no-public-ATS gap companies via TheirStack (Product/Program,
+    US, last N days). Costs ~1 credit/job (200/mo free). Then rescore new jobs.
+
+    Body (optional): {companies: [...], max_age_days: 7}
+    """
+    from app.services.theirstack_service import run_theirstack_fill
+    from app import database as db
+    body = body or {}
+    result = await run_theirstack_fill(
+        companies=body.get("companies"),
+        max_age_days=int(body.get("max_age_days", 7)),
+    )
+    # Score the newly added jobs so they surface in Jobs / Top 70.
+    if result.get("jobs_upserted"):
+        try:
+            profile = await db.get_profile()
+            await db.rescore_all_jobs(profile, only_unscored=True, max_batches=2)
+        except Exception as e:
+            result["rescore_error"] = str(e)
+    return result
+
+
 @router.post("/scrape")
 async def start_ats_scrape(body: dict | None = None):
     """Trigger ATS-only scrape."""

@@ -21,6 +21,7 @@ class Settings(BaseSettings):
     # --- Scraping ---
     apify_token: str = ""
     firecrawl_api_key: str = ""
+    theirstack_api_key: str = ""   # jobs API for the no-public-ATS gap companies
 
     # --- Browser Automation ---
     browserbase_api_key: str = ""
