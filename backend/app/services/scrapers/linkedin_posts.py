@@ -21,11 +21,19 @@ from app.logger import log
 
 LINKEDIN_POSTS_ACTOR = "harvestapi~linkedin-post-search"
 
-# Hiring-intent search queries. Company targeting (TARGET_COMPANIES) does the
-# heavy lifting for relevance, so these stay role-focused and broad.
+# Hashtag-driven hiring-post queries (user's ask: #hiring + #PM combos). These
+# run BROAD (not restricted to target-company employees) because hiring posts
+# come from recruiters/founders, not company staff. The US + PM gate downstream
+# (is_likely_us + _contact_relevance) keeps results on-target (~80% US — hashtags
+# like #hiringUS are used loosely worldwide, so a post-filter is essential).
 SEARCH_QUERIES = [
-    '"we\'re hiring" ("product manager" OR "product lead" OR "head of product" OR PM)',
-    '"we\'re hiring" ("software engineer" OR "program manager" OR "technical program manager")',
+    "#hiring #productmanager",
+    "#hiring #PM product manager",
+    "#productmanagement #hiring",
+    "#hiringUS product manager",
+    "#UShiring product manager",
+    "#techhiring product manager",
+    '#hiring "product manager" "United States"',
 ]
 
 # US target companies — posts are scraped only from employees of these companies.
@@ -70,8 +78,9 @@ HIRING_KEYWORDS = [
 
 async def scrape_linkedin_posts(
     queries: list[str] | None = None,
-    max_posts_per_query: int = 40,
+    max_posts_per_query: int = 25,
     date_range: str = "24h",
+    use_company_filter: bool = False,
 ) -> list[dict[str, Any]]:
     """Scrape LinkedIn for hiring-related posts via Apify.
 
@@ -97,7 +106,9 @@ async def scrape_linkedin_posts(
         return []
 
     queries = queries or SEARCH_QUERIES
-    batches = _company_batches()
+    # Hashtag mode runs broad (one pass per query, no company filter). Company
+    # mode (legacy) batches across target-company employees.
+    batches = _company_batches() if use_company_filter else [None]
     all_posts: list[dict] = []
 
     async with httpx.AsyncClient(timeout=180) as client:
@@ -113,10 +124,7 @@ async def scrape_linkedin_posts(
                         authors_companies=companies,
                     )
                     all_posts.extend(posts)
-                    log.info(
-                        f"LinkedIn posts: '{query[:40]}' × {len(companies)} cos "
-                        f"→ {len(posts)} results"
-                    )
+                    log.info(f"LinkedIn posts: '{query[:40]}' → {len(posts)} results")
                 except Exception as e:
                     log.error(f"LinkedIn post scrape failed for '{query[:40]}': {e}")
                     continue
