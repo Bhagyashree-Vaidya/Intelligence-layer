@@ -243,6 +243,9 @@ async def get_contacts(
     """Fetch networking contacts, sorted by recency."""
     db = get_db()
     q = db.table("contacts").select("*", count="exact")
+    # Signals tab shows ONLY signal-sourced contacts. Referral (people_discovery)
+    # contacts live in the Referrals tab and must not leak into Signals.
+    q = q.neq("source", "people_discovery")
     if recruiter_only:
         q = q.eq("is_recruiter", True)
     if relevant_only:
@@ -273,7 +276,10 @@ async def get_signal_stats() -> dict:
         .in_("suggested_action", ["apply", "message", "connect"])
         .execute()
     )
-    contacts_count = db.table("contacts").select("id", count="exact").execute()
+    contacts_count = (
+        db.table("contacts").select("id", count="exact")
+        .neq("source", "people_discovery").execute()
+    )
 
     return {
         "total_signals": total.count or 0,
