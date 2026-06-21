@@ -28,11 +28,12 @@ def _get_client() -> anthropic.AsyncAnthropic:
 async def complete(
     system: str,
     user: str,
-    model: str = "claude-sonnet-4-20250514",
+    model: str = "claude-sonnet-4-6",
     max_tokens: int = 4096,
     temperature: float = 0.3,
 ) -> str:
-    """Raw text completion from Claude."""
+    """Raw text completion from Claude. (Old claude-sonnet-4-20250514 was retired
+    -> 404; this is the current Sonnet.)"""
     client = _get_client()
     response = await client.messages.create(
         model=model,
@@ -47,11 +48,12 @@ async def complete(
 async def complete_json(
     system: str,
     user: str,
-    model: str = "claude-sonnet-4-20250514",
+    model: str = "claude-haiku-4-5-20251001",
     max_tokens: int = 4096,
     temperature: float = 0.2,
 ) -> dict[str, Any]:
-    """Get structured JSON from Claude. Prompt must request JSON output."""
+    """Get structured JSON from Claude. Prompt must request JSON output.
+    Haiku 4.5 — cheap + fast for high-volume classify/enrich/score."""
     text = await complete(
         system=system + "\n\nRespond with valid JSON only. No markdown, no explanation.",
         user=user,
